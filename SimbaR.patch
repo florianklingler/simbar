@@ -1,0 +1,3518 @@
+diff --git a/lib/etsi-messages/Makefile b/lib/etsi-messages/Makefile
+index c4fe048807..e9c916e5ce 100644
+--- a/lib/etsi-messages/Makefile
++++ b/lib/etsi-messages/Makefile
+@@ -25,6 +25,10 @@ ASN_MODULE_SOURCES=	\
+ 	CAM.c	\
+ 	CoopAwareness.c	\
+ 	CamParameters.c	\
++	EvaluationContainer.c \
++	EvalSequenceNumber.c \
++	RunNumber.c \
++	ByteBuffer.c \
+ 	HighFrequencyContainer.c	\
+ 	LowFrequencyContainer.c	\
+ 	SpecialVehicleContainer.c	\
+@@ -348,6 +352,10 @@ ASN_MODULE_HEADERS=	\
+ 	CAM.h	\
+ 	CoopAwareness.h	\
+ 	CamParameters.h	\
++	EvaluationContainer.h \
++	EvalSequenceNumber.h \
++	RunNumber.h \
++	ByteBuffer.h \
+ 	HighFrequencyContainer.h	\
+ 	LowFrequencyContainer.h	\
+ 	SpecialVehicleContainer.h	\
+@@ -763,7 +771,6 @@ buildclean:
+ clean: buildclean
+ 	rm -rf $(INCLDIR)
+ 	rm -f $(TGTLIB)
+-	rm -rf $(ASN1DIR)
+ 
+ regen: $(WITNESS)
+ 
+diff --git a/lib/etsi-messages/asn1/ITS_ASN1-CAM.asn b/lib/etsi-messages/asn1/ITS_ASN1-CAM.asn
+index e6cb301a6d..fb01dc9ce8 100644
+--- a/lib/etsi-messages/asn1/ITS_ASN1-CAM.asn
++++ b/lib/etsi-messages/asn1/ITS_ASN1-CAM.asn
+@@ -7,7 +7,7 @@ DEFINITIONS AUTOMATIC TAGS ::=
+ BEGIN
+ 
+ IMPORTS 
+-ItsPduHeader, CauseCode, ReferencePosition, AccelerationControl, Curvature, CurvatureCalculationMode, Heading, LanePosition, EmergencyPriority, EmbarkationStatus, Speed, DriveDirection, LongitudinalAcceleration, LateralAcceleration, VerticalAcceleration, StationType, ExteriorLights, DangerousGoodsBasic, SpecialTransportType, LightBarSirenInUse, VehicleRole, VehicleLength, VehicleWidth, PathHistory, RoadworksSubCauseCode, ClosedLanes, TrafficRule, SpeedLimit, SteeringWheelAngle, PerformanceClass, YawRate, ProtectedCommunicationZone, PtActivation, Latitude, Longitude, ProtectedCommunicationZonesRSU, CenDsrcTollingZone FROM ITS-Container {
++EvalSequenceNumber, RunNumber, ByteBuffer, ItsPduHeader, CauseCode, ReferencePosition, AccelerationControl, Curvature, CurvatureCalculationMode, Heading, LanePosition, EmergencyPriority, EmbarkationStatus, Speed, DriveDirection, LongitudinalAcceleration, LateralAcceleration, VerticalAcceleration, StationType, ExteriorLights, DangerousGoodsBasic, SpecialTransportType, LightBarSirenInUse, VehicleRole, VehicleLength, VehicleWidth, PathHistory, RoadworksSubCauseCode, ClosedLanes, TrafficRule, SpeedLimit, SteeringWheelAngle, PerformanceClass, YawRate, ProtectedCommunicationZone, PtActivation, Latitude, Longitude, ProtectedCommunicationZonesRSU, CenDsrcTollingZone FROM ITS-Container {
+ itu-t (0) identified-organization (4) etsi (0) itsDomain (5) wg1 (1) ts (102894) cdd (2) version (1) 
+ };
+ 
+@@ -29,6 +29,14 @@ CamParameters ::= SEQUENCE {
+     highFrequencyContainer HighFrequencyContainer,
+     lowFrequencyContainer LowFrequencyContainer OPTIONAL,
+     specialVehicleContainer SpecialVehicleContainer OPTIONAL,
++    evaluationContainer EvaluationContainer OPTIONAL,
++    ...
++}
++
++EvaluationContainer ::= SEQUENCE {
++    evalSequenceNumber EvalSequenceNumber,
++    runNumber RunNumber,
++    byteBuffer ByteBuffer OPTIONAL,
+     ...
+ }
+ 
+@@ -129,4 +137,4 @@ RSUContainerHighFrequency ::= SEQUENCE {
+ 
+ GenerationDeltaTime ::= INTEGER { oneMilliSec(1) } (0..65535)
+ 
+-END
+\ No newline at end of file
++END
+diff --git a/lib/etsi-messages/asn1/ITS_ASN1-ITS-Container.asn b/lib/etsi-messages/asn1/ITS_ASN1-ITS-Container.asn
+index a45fe1b079..942e27e463 100644
+--- a/lib/etsi-messages/asn1/ITS_ASN1-ITS-Container.asn
++++ b/lib/etsi-messages/asn1/ITS_ASN1-ITS-Container.asn
+@@ -14,6 +14,12 @@ ItsPduHeader ::= SEQUENCE {
+ 
+ StationID ::= INTEGER(0..4294967295)
+ 
++EvalSequenceNumber ::= INTEGER(0..4294967295)
++
++RunNumber ::= INTEGER(0..4294967295)
++
++ByteBuffer ::= OCTET STRING (SIZE(0..2048))
++
+ ReferencePosition ::= SEQUENCE {
+     latitude Latitude,
+     longitude Longitude,
+@@ -495,4 +501,4 @@ ProtectedZoneID ::= INTEGER (0.. 134217727)
+ 
+ CenDsrcTollingZoneID ::= ProtectedZoneID
+ 
+-END
+\ No newline at end of file
++END
+diff --git a/lib/omnetpp/include/omnetpp/cdefaultlist.h b/lib/omnetpp/include/omnetpp/cdefaultlist.h
+index 79f7de7cf1..79a69bd08e 100644
+--- a/lib/omnetpp/include/omnetpp/cdefaultlist.h
++++ b/lib/omnetpp/include/omnetpp/cdefaultlist.h
+@@ -17,6 +17,7 @@
+ #define __OMNETPP_CDEFAULTLIST_H
+ 
+ #include "cownedobject.h"
++#include <mutex>
+ 
+ namespace omnetpp {
+ 
+@@ -43,6 +44,8 @@ class SIM_API cDefaultList : public cNoncopyableOwnedObject
+     cOwnedObject **objs; // array of owned objects
+     int numObjs;         // number of elements used in objects[] (0..num-1)
+     int capacity;        // allocated size of objs[]
++    mutable std::mutex mutex_objs;
++
+ 
+ #ifdef SIMFRONTEND_SUPPORT
+   private:
+diff --git a/lib/omnetpp/include/omnetpp/ceventheap.h b/lib/omnetpp/include/omnetpp/ceventheap.h
+index b600c368e1..cc8146850d 100644
+--- a/lib/omnetpp/include/omnetpp/ceventheap.h
++++ b/lib/omnetpp/include/omnetpp/ceventheap.h
+@@ -17,6 +17,7 @@
+ #define __OMNETPP_CEVENTHEAP_H
+ 
+ #include "cfutureeventset.h"
++#include <mutex>
+ 
+ namespace omnetpp {
+ 
+@@ -47,6 +48,9 @@ class SIM_API cEventHeap : public cFutureEventSet
+     int cbhead, cbtail;       // cbhead is inclusive, cbtail is exclusive
+     bool useCb;               // for disabling cb
+ 
++    mutable std::mutex mutex_fes;
++    // std::mutex mutex_fes;
++
+   private:
+     void copy(const cEventHeap& other);
+ 
+diff --git a/lib/omnetpp/include/omnetpp/cscheduler.h b/lib/omnetpp/include/omnetpp/cscheduler.h
+index cebde589f4..643da3b15e 100644
+--- a/lib/omnetpp/include/omnetpp/cscheduler.h
++++ b/lib/omnetpp/include/omnetpp/cscheduler.h
+@@ -19,6 +19,7 @@
+ #include "cobject.h"
+ #include "simtime_t.h"
+ #include "clifecyclelistener.h"
++#include "coutvector.h"
+ 
+ namespace omnetpp {
+ 
+@@ -221,6 +222,8 @@ class SIM_API cRealTimeScheduler : public cScheduler
+     bool waitUntil(int64_t targetTime); // in microseconds
+     int64_t toUsecs(simtime_t t);
+ 
++    cOutVector eventTimeDifferences;
++
+   public:
+     /**
+      * Constructor.
+diff --git a/lib/omnetpp/src/sim/cdefaultlist.cc b/lib/omnetpp/src/sim/cdefaultlist.cc
+index 53600644c8..18e797442b 100644
+--- a/lib/omnetpp/src/sim/cdefaultlist.cc
++++ b/lib/omnetpp/src/sim/cdefaultlist.cc
+@@ -42,15 +42,19 @@ cDefaultList::cDefaultList(const char *name) : cNoncopyableOwnedObject(name)
+     // careful: if we are a global variable (ctor called before main()),
+     // then insert() may get called before constructor and it invoked
+     // construct() already.
+-    if (cStaticFlag::insideMain() || capacity == 0)
++    mutex_objs.lock();
++    if (cStaticFlag::insideMain() || capacity == 0) {
+         construct();
++    }
++    mutex_objs.unlock();
+ 
+     // if we're invoked before main, then we are a global variable (dynamic
+     // instances of cDefaultList are not supposed to be created
+     // before main()) --> remove ourselves from ownership tree because
+     // we shouldn't be destroyed via operator delete
+-    if (!cStaticFlag::insideMain())
++    if (!cStaticFlag::insideMain()) {
+         removeFromOwnershipTree();
++    }
+ }
+ 
+ void cDefaultList::construct()
+@@ -67,6 +71,7 @@ void cDefaultList::construct()
+ 
+ cDefaultList::~cDefaultList()
+ {
++    mutex_objs.lock();
+     if (getPerformFinalGC()) {
+         // delete all owned objects. One place we make use of this is behavior is
+         // when a simple module gets deleted -- there we have to delete all dynamically
+@@ -91,10 +96,12 @@ cDefaultList::~cDefaultList()
+         // we can free up the pointer array itself though
+         delete[] objs;
+     }
++    mutex_objs.unlock();
+ }
+ 
+ void cDefaultList::doInsert(cOwnedObject *obj)
+ {
++    mutex_objs.lock();
+     ASSERT(obj != this || this == &defaultList);
+ 
+     if (numObjs >= capacity) {
+@@ -117,10 +124,12 @@ void cDefaultList::doInsert(cOwnedObject *obj)
+ #ifdef SIMFRONTEND_SUPPORT
+     lastChangeSerial = changeCounter++;
+ #endif
++    mutex_objs.unlock();
+ }
+ 
+ void cDefaultList::ownedObjectDeleted(cOwnedObject *obj)
+ {
++    mutex_objs.lock();
+     ASSERT(obj && obj->owner == this);
+ 
+     // move last object to obj's old position
+@@ -129,10 +138,12 @@ void cDefaultList::ownedObjectDeleted(cOwnedObject *obj)
+ #ifdef SIMFRONTEND_SUPPORT
+     lastChangeSerial = changeCounter++;
+ #endif
++    mutex_objs.unlock();
+ }
+ 
+ void cDefaultList::yieldOwnership(cOwnedObject *obj, cObject *newowner)
+ {
++    mutex_objs.lock();
+     ASSERT(obj && obj->owner == this && numObjs > 0);
+ 
+     // give object to its new owner
+@@ -144,48 +155,61 @@ void cDefaultList::yieldOwnership(cOwnedObject *obj, cObject *newowner)
+ #ifdef SIMFRONTEND_SUPPORT
+     lastChangeSerial = changeCounter++;
+ #endif
++    mutex_objs.unlock();
+ }
+ 
+ void cDefaultList::takeAllObjectsFrom(cDefaultList& other)
+ {
+-    while (other.defaultListSize() > 0)
++    while (other.defaultListSize() > 0) {
+         take(other.defaultListGet(0));
++    }
+ }
+ 
+ std::string cDefaultList::str() const
+ {
++    mutex_objs.lock();
+     std::stringstream out;
+     out << "n=" << numObjs;
++    mutex_objs.unlock();
+     return out.str();
+ }
+ 
+ void cDefaultList::forEachChild(cVisitor *v)
+ {
+-    for (int i = 0; i < numObjs; i++)
++    mutex_objs.lock();
++    for (int i = 0; i < numObjs; i++) {
+         v->visit(objs[i]);
++    }
++    mutex_objs.unlock();
+ }
+ 
+ void cDefaultList::parsimPack(cCommBuffer *buffer) const
+ {
++    mutex_objs.lock();
+ #ifndef WITH_PARSIM
+     throw cRuntimeError(this, E_NOPARSIM);
+ #else
+     cOwnedObject::parsimPack(buffer);
+ 
+-    if (numObjs > 0)
++    if (numObjs > 0) {
+         throw cRuntimeError(this, "parsimPack() not supported (makes no sense)");
++    }
+ #endif
++    mutex_objs.unlock();
+ }
+ 
+ void cDefaultList::parsimUnpack(cCommBuffer *buffer)
+ {
++    mutex_objs.lock();
+ #ifndef WITH_PARSIM
+     throw cRuntimeError(this, E_NOPARSIM);
+ #else
+     cOwnedObject::parsimUnpack(buffer);
+-    if (numObjs > 0)
++    if (numObjs > 0) {
+         throw cRuntimeError(this, "parsimUnpack(): Can only unpack into empty object");
++    }
+ #endif
++    mutex_objs.unlock();
+ }
+ 
+ void cDefaultList::take(cOwnedObject *obj)
+@@ -207,8 +231,12 @@ void cDefaultList::drop(cOwnedObject *obj)
+ 
+ cOwnedObject *cDefaultList::defaultListGet(int k)
+ {
+-    if (k < 0 || k >= numObjs)
++    mutex_objs.lock();
++    if (k < 0 || k >= numObjs) {
++        mutex_objs.unlock();
+         return nullptr;
++    }
++    mutex_objs.unlock();
+     return objs[k];
+ }
+ 
+diff --git a/lib/omnetpp/src/sim/ceventheap.cc b/lib/omnetpp/src/sim/ceventheap.cc
+index 8518a47aed..e0c7c2e34a 100644
+--- a/lib/omnetpp/src/sim/ceventheap.cc
++++ b/lib/omnetpp/src/sim/ceventheap.cc
+@@ -66,7 +66,7 @@ cEventHeap::cEventHeap(const char *name, int intialCapacity) : cFutureEventSet(n
+     cbsize = 4;  // must be power of 2!
+     cb = new cEvent *[cbsize];
+     cbhead = cbtail = 0;
+-    useCb = true;
++    useCb = false;
+ }
+ 
+ cEventHeap::cEventHeap(const cEventHeap& other) : cFutureEventSet(other)
+@@ -86,10 +86,12 @@ cEventHeap::~cEventHeap()
+ 
+ std::string cEventHeap::str() const
+ {
++    // mutex_fes.lock();
+     if (isEmpty())
+         return std::string("empty");
+     std::stringstream out;
+     out << "length=" << getLength();
++    // mutex_fes.unlock();
+     return out.str();
+ }
+ 
+@@ -107,6 +109,7 @@ void cEventHeap::forEachChild(cVisitor *v)
+ 
+ void cEventHeap::clear()
+ {
++    mutex_fes.lock();
+     for (int i = cbhead; i != cbtail; CBINC(i))
+         dropAndDelete(cb[i]);
+     cbhead = cbtail = 0;
+@@ -114,10 +117,12 @@ void cEventHeap::clear()
+     for (int i = 1; i <= heapLength; i++)
+         dropAndDelete(heap[i]);
+     heapLength = 0;
++    mutex_fes.unlock();
+ }
+ 
+ void cEventHeap::copy(const cEventHeap& other)
+ {
++    mutex_fes.lock();
+     // copy heap
+     heapLength = other.heapLength;
+     heapCapacity = other.heapCapacity;
+@@ -135,50 +140,68 @@ void cEventHeap::copy(const cEventHeap& other)
+     cb = new cEvent *[cbsize];
+     for (int i = cbhead; i != cbtail; CBINC(i))
+         take(cb[i] = other.cb[i]->dup());
++    mutex_fes.unlock();
+ }
+ 
+ cEventHeap& cEventHeap::operator=(const cEventHeap& other)
+ {
++    // mutex_fes.lock();
+     if (this == &other)
++        // mutex_fes.unlock();
+         return *this;
+     cFutureEventSet::operator=(other);
+     clear();
+     copy(other);
++    // mutex_fes.unlock();
+     return *this;
+ }
+ 
+ cEvent *cEventHeap::get(int k)
+ {
+-    if (k < 0)
++    mutex_fes.lock();
++    if (k < 0) {
++        mutex_fes.unlock();
+         return nullptr;
++    }
+ 
+     // first few elements map into the circular buffer
+     int cblen = cblength();
+-    if (k < cblen)
++    if (k < cblen) {
++        mutex_fes.unlock();
+         return cbget(k);
++    }
+     k -= cblen;
+ 
+     // map the rest to h[1]..h[n] (h[] is 1-based)
+-    if (k >= heapLength)
++    if (k >= heapLength) {
++        mutex_fes.unlock();
+         return nullptr;
++    }
++    mutex_fes.unlock();
+     return heap[k+1];
+ }
+ 
+ void cEventHeap::sort()
+ {
++    mutex_fes.lock();
+     qsort(heap+1, heapLength, sizeof(cEvent *), qsort_cmp_msgs);
+-    for (int i = 1; i <= heapLength; i++)
++    for (int i = 1; i <= heapLength; i++) {
+         heap[i]->heapIndex = i;
++    }
++    mutex_fes.unlock();
+ }
+ 
+ void cEventHeap::insert(cEvent *event)
+ {
++    mutex_fes.lock();
+     take(event);
++    ASSERT(event->getOwner() == this);
+ 
+     event->insertOrder = insertCount++;
+ 
+     if (!useCb) {
+         heapInsert(event);
++        mutex_fes.unlock();
+         return;
+     }
+ 
+@@ -195,10 +218,12 @@ void cEventHeap::insert(cEvent *event)
+             flushCb();  // move all events into the heap
+     }
+ 
+-    if (eligible)
++    if (eligible) {
+         cbInsert(event);
+-    else
++    }else{
+         heapInsert(event);
++    }
++    mutex_fes.unlock();
+ }
+ 
+ void cEventHeap::cbInsert(cEvent *event)
+@@ -254,6 +279,7 @@ void cEventHeap::flushCb()
+ 
+ void cEventHeap::shiftup(int from)
+ {
++    // mutex_fes.lock();
+     // restores heap structure (in a sub-heap)
+     int i, j;
+     cEvent *temp;
+@@ -271,21 +297,37 @@ void cEventHeap::shiftup(int from)
+         else
+             break;
+     }
++    // mutex_fes.unlock();
+ }
+ 
+ cEvent *cEventHeap::peekFirst() const
+ {
+-    return cbhead != cbtail ? cb[cbhead] : heapLength != 0 ? heap[1] : nullptr;
++    // return cbhead != cbtail ? cb[cbhead] : heapLength != 0 ? heap[1] : nullptr;
++    mutex_fes.lock();
++    if (cbhead != cbtail) {
++        mutex_fes.unlock();
++        return cb[cbhead];
++    }else{
++        if (heapLength != 0) {
++            mutex_fes.unlock();
++            return heap[1];
++        }else{
++            mutex_fes.unlock();
++            return nullptr;
++        }
++    }
+ }
+ 
+ cEvent *cEventHeap::removeFirst()
+ {
++    mutex_fes.lock();
+     if (cbhead != cbtail) {
+         // remove head element from circular buffer
+         cEvent *event = cb[cbhead];
+         CBINC(cbhead);
+         drop(event);
+         event->heapIndex = -1;
++        mutex_fes.unlock();
+         return event;
+     }
+     else if (heapLength > 0) {
+@@ -295,16 +337,21 @@ cEvent *cEventHeap::removeFirst()
+         shiftup();
+         drop(event);
+         event->heapIndex = -1;
++        mutex_fes.unlock();
+         return event;
+     }
++    mutex_fes.unlock();
+     return nullptr;
+ }
+ 
+ cEvent *cEventHeap::remove(cEvent *event)
+ {
++    mutex_fes.lock();
+     // make sure it is really on the heap
+-    if (event->heapIndex == -1)
++    if (event->heapIndex == -1) {
++        mutex_fes.unlock();
+         return nullptr;
++    }
+ 
+     if (event->heapIndex < 0) {
+         // event is in the circular buffer
+@@ -337,19 +384,23 @@ cEvent *cEventHeap::remove(cEvent *event)
+ 
+     drop(event);
+     event->heapIndex = -1;
++    mutex_fes.unlock();
+     return event;
+ }
+ 
+ void cEventHeap::putBackFirst(cEvent *event)
+ {
++    mutex_fes.lock();
+     take(event);
+ 
+     CBDEC(cbhead);
+     cb[cbhead] = event;
+     event->heapIndex = CBHEAPINDEX(cbhead);
+ 
+-    if (cbtail == cbhead)
++    if (cbtail == cbhead) {
+         cbgrow();
++    }
++    mutex_fes.unlock();
+ }
+ 
+ }  // namespace omnetpp
+diff --git a/lib/omnetpp/src/sim/cscheduler.cc b/lib/omnetpp/src/sim/cscheduler.cc
+index f3788ad766..a9abe33b47 100644
+--- a/lib/omnetpp/src/sim/cscheduler.cc
++++ b/lib/omnetpp/src/sim/cscheduler.cc
+@@ -125,6 +125,8 @@ void cRealTimeScheduler::startRun()
+     doScaling = (factor != 0);
+ 
+     baseTime = opp_get_monotonic_clock_usecs();
++
++    eventTimeDifferences.setName("eventTimeDifferences");
+ }
+ 
+ int64_t cRealTimeScheduler::toUsecs(simtime_t t)
+@@ -143,6 +145,7 @@ bool cRealTimeScheduler::waitUntil(int64_t targetTime)
+     // if there's more than 200ms to wait, wait in 100ms chunks
+     // in order to keep UI responsiveness by invoking getEnvir()->idle()
+     int64_t currentTime = opp_get_monotonic_clock_usecs();
++    eventTimeDifferences.record(targetTime - currentTime);
+     while (targetTime - currentTime >= 200000) {
+         usleep(100000);  // 100ms
+         if (getEnvir()->idle())
+@@ -164,10 +167,16 @@ cEvent *cRealTimeScheduler::guessNextEvent()
+ 
+ cEvent *cRealTimeScheduler::takeNextEvent()
+ {
+-    cEvent *event = sim->getFES()->peekFirst();
++    // cEvent *event = sim->getFES()->peekFirst();
++    cEvent *event = sim->getFES()->removeFirst();
+     if (!event)
+         throw cTerminationException(E_ENDEDOK);
+ 
++    // check message type
++    if (std::string("check simint msg buffer").compare(event->getName()) == 0 || std::string("check dut msg buffer").compare(event->getName()) == 0) {
++        // event is asynchronous, process it immediately
++        return event;
++    }
+     // calculate target time
+     simtime_t eventSimtime = event->getArrivalTime();
+     int64_t targetTime = baseTime + toUsecs(eventSimtime);
+@@ -184,8 +193,8 @@ cEvent *cRealTimeScheduler::takeNextEvent()
+     }
+ 
+     // remove event from FES and return it
+-    cEvent *tmp = sim->getFES()->removeFirst();
+-    ASSERT(tmp == event);
++    // cEvent *tmp = sim->getFES()->removeFirst();
++    // ASSERT(tmp == event);
+     return event;
+ }
+ 
+diff --git a/lib/omnetpp/src/sim/csimulation.cc b/lib/omnetpp/src/sim/csimulation.cc
+index ede9df00c2..9c7c7fc2d1 100644
+--- a/lib/omnetpp/src/sim/csimulation.cc
++++ b/lib/omnetpp/src/sim/csimulation.cc
+@@ -593,7 +593,15 @@ void cSimulation::executeEvent(cEvent *event)
+     currentEventNumber++;
+ 
+     // advance simulation time
+-    currentSimtime = event->getArrivalTime();
++    if (std::string("check simint msg buffer").compare(event->getName()) == 0 || std::string("check dut msg buffer").compare(event->getName()) == 0) {
++        if (currentSimtime < event->getArrivalTime()) {
++            currentSimtime = event->getArrivalTime();
++        }else{
++            // std::cout << "cSimulation: causality violation due to race condition: currentSimtime: " << currentSimtime << ", event arrival time: " << event->getArrivalTime() << ", do not advance currentSimtime!!!" << std::endl;
++        }
++    }else{
++        currentSimtime = event->getArrivalTime();
++    }
+ 
+     // notify the environment about the event (writes eventlog, etc.)
+     EVCB.simulationEvent(event);
+diff --git a/lib/openWRT/build_firmware.sh b/lib/openWRT/build_firmware.sh
+new file mode 100755
+index 0000000000..d73f4128b2
+--- /dev/null
++++ b/lib/openWRT/build_firmware.sh
+@@ -0,0 +1,28 @@
++# This file is part of Lanradio.
++#
++# Lanradio is free software: you can redistribute it and/or modify
++# it under the terms of the GNU Lesser General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# Lanradio is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public License
++# along with Lanradio.  If not, see <http://www.gnu.org/licenses/>.
++#
++# Authors:
++# Florian Klingler <klingler@ccs-labs.org>
++
++#!/bin/bash
++./scripts/feeds update -a
++./scripts/feeds install -a
++
++VERSION="0.01"
++#BUILD_DATE="$(date --utc --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y-%m-%d)"
++BUILD_DATE="$(date --utc)"
++
++make package/base-files/clean
++make -j4 CONFIG_VERSION_CODE="$VERSION - built $BUILD_DATE"
+diff --git a/lib/openWRT/feeds.conf.default b/lib/openWRT/feeds.conf.default
+index 050b3ee4ed..21c573dc71 100644
+--- a/lib/openWRT/feeds.conf.default
++++ b/lib/openWRT/feeds.conf.default
+@@ -2,3 +2,4 @@ src-git packages https://git.openwrt.org/feed/packages.git^99efce0cd27adfcc53384
+ src-git luci https://git.openwrt.org/project/luci.git^13dd17fca148965d38f0d4e578b19679a7c4daa2
+ src-git routing https://git.openwrt.org/feed/routing.git^efa6e5445adda9c6545f551808829ec927cbade8
+ src-git telephony https://git.openwrt.org/feed/telephony.git^6f95d6ab3f359ee2ce81c20522700937424d1591
++src-cpy lanradioFeed ../../src/openWRT-feed
+diff --git a/lib/openWRT/package/firmware/wireless-regdb/Makefile b/lib/openWRT/package/firmware/wireless-regdb/Makefile
+index 26f470af44..ada3211e9f 100644
+--- a/lib/openWRT/package/firmware/wireless-regdb/Makefile
++++ b/lib/openWRT/package/firmware/wireless-regdb/Makefile
+@@ -20,6 +20,7 @@ define Package/wireless-regdb
+ endef
+ 
+ define Build/Compile
++	$(CP) ./files/db.txt $(PKG_BUILD_DIR)/db.txt
+ 	$(STAGING_DIR_HOST)/bin/$(PYTHON) $(PKG_BUILD_DIR)/db2fw.py $(PKG_BUILD_DIR)/regulatory.db $(PKG_BUILD_DIR)/db.txt
+ endef
+ 
+diff --git a/lib/openWRT/package/firmware/wireless-regdb/files/db.txt b/lib/openWRT/package/firmware/wireless-regdb/files/db.txt
+new file mode 100644
+index 0000000000..93bb4abdff
+--- /dev/null
++++ b/lib/openWRT/package/firmware/wireless-regdb/files/db.txt
+@@ -0,0 +1,1384 @@
++wmmrule ETSI:
++	vo_c: cw_min=3, cw_max=7, aifsn=2, cot=2
++	vi_c: cw_min=7, cw_max=15, aifsn=2, cot=4
++	be_c: cw_min=15, cw_max=1023, aifsn=3, cot=6
++	bk_c: cw_min=15, cw_max=1023, aifsn=7, cot=6
++	vo_ap: cw_min=3, cw_max=7, aifsn=1, cot=2
++	vi_ap: cw_min=7, cw_max=15, aifsn=1, cot=4
++	be_ap: cw_min=15, cw_max=63, aifsn=3, cot=6
++	bk_ap: cw_min=15, cw_max=1023, aifsn=7, cot=6
++
++# This is the world regulatory domain
++country 00:
++	(2402 - 2472 @ 40), (20)
++	# Channel 12 - 13.
++	(2457 - 2482 @ 20), (20), NO-IR, AUTO-BW
++	# Channel 14. Only JP enables this and for 802.11b only
++	(2474 - 2494 @ 20), (20), NO-IR, NO-OFDM
++	# Channel 36 - 48
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	# Channel 52 - 64
++	(5250 - 5330 @ 80), (20), NO-IR, DFS, AUTO-BW
++	# Channel 100 - 144
++	(5490 - 5730 @ 160), (20), NO-IR, DFS
++	# Channel 149 - 165
++	(5735 - 5835 @ 80), (20), NO-IR
++	# IEEE 802.11ad (60GHz), channels 1..3
++	(57240 - 63720 @ 2160), (0)
++
++
++country AD:
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, wmmrule=ETSI
++	(5490 - 5710 @ 80), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country AE: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country AF: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++# Source:
++# http://pucanguilla.org/Downloads/January2005-Anguilla%20Table%20of%20Allocations.pdf
++country AI: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country AL: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20.00), AUTO-BW
++	(5250 - 5330 @ 80), (20.00), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27.00), DFS
++
++country AM: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 20), (18)
++	(5250 - 5330 @ 20), (18), DFS
++
++country AN: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country AR: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country AS: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country AT: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++# Source:
++# https://www.legislation.gov.au/Details/F2016C00432
++# Both DFS-ETSI and DFS-FCC are acceptable per AS/NZS 4268 Appendix B.
++# The EIRP for DFS bands can be increased by 3dB if TPC is implemented.
++# In order to allow 80MHz operation between 5650-5730MHz the upper boundary
++# of this more restrictive band has been shifted up by 5MHz from 5725MHz.
++country AU: DFS-ETSI
++	(2400 - 2483.5 @ 40), (36)
++	(5150 - 5250 @ 80), (23), NO-OUTDOOR, AUTO-BW
++	(5250 - 5350 @ 80), (20), NO-OUTDOOR, AUTO-BW, DFS
++	(5470 - 5600 @ 80), (27), DFS
++	(5650 - 5730 @ 80), (27), DFS
++	(5730 - 5850 @ 80), (36)
++	(57000 - 66000 @ 2160), (43), NO-OUTDOOR
++
++country AW: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country AZ: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (18), AUTO-BW
++	(5250 - 5330 @ 80), (18), DFS, AUTO-BW
++
++country BA: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country BB: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (23), AUTO-BW
++	(5250 - 5330 @ 80), (23), DFS, AUTO-BW
++	(5735 - 5835 @ 80), (30)
++
++country BD: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5735 - 5835 @ 80), (30)
++
++country BE: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country BF: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++# Bulgarian rules as defined by the Communications Regulation Commission in the
++# following documents:
++#
++# Rules for carrying out electronic communications through radio equipment using
++# radio spectrum, which does not need to be individually assigned (the Rules):
++# http://www.crc.bg/files/_bg/Pravila_09_06_2015.pdf
++#
++# List of radio equipment that uses harmonized within the European Union bands
++# and electronic communications terminal equipment (the List):
++# http://www.crc.bg/files/_bg/Spisak_2015.pdf
++#
++# Note: The transmit power limits in the 5250-5350 MHz and 5470-5725 MHz bands
++# can be raised by 3 dBm if TPC is enabled. Refer to BDS EN 301 893 for details.
++country BG: DFS-ETSI
++	# Wideband data transmission systems (WDTS) in the 2.4GHz ISM band, ref:
++	# I.22 of the List, BDS EN 300 328
++	(2402 - 2482 @ 40), (20)
++	# 5 GHz Radio Local Area Networks (RLANs), ref:
++	# II.H01 of the List, BDS EN 301 893
++	(5170 - 5250 @ 80), (23), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	# II.H01 of the List, I.54 from the List, BDS EN 301 893
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# Short range devices (SRDs) in the 5725-5875 MHz frequency range, ref:
++	# I.43 of the List, BDS EN 300 440-2, BDS EN 300 440-1
++	(5725 - 5875 @ 80), (14)
++	# 60 GHz Multiple-Gigabit RLAN Systems, ref:
++	# II.H03 of the List, BDS EN 302 567-2
++	(57000 - 66000 @ 2160), (40), NO-OUTDOOR
++
++country BH: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 20), (20)
++	(5250 - 5330 @ 20), (20), DFS
++	(5735 - 5835 @ 20), (20)
++
++country BL: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country BM: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country BN: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5735 - 5835 @ 80), (20)
++
++country BO: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5250 - 5330 @ 80), (30), DFS
++	(5735 - 5835 @ 80), (30)
++
++country BR: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country BS: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++# Source:
++# http://www.bicma.gov.bt/paper/publication/nrrpart4.pdf
++country BT: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country BY: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country BZ: DFS-JP
++	(2402 - 2482 @ 40), (30)
++	(5735 - 5835 @ 80), (30)
++
++# Source:
++# https://www.ic.gc.ca/eic/site/smt-gst.nsf/vwapj/rss-247-i2-e.pdf/$file/rss-247-i2-e.pdf
++country CA: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5150 - 5250 @ 80), (23), NO-OUTDOOR, AUTO-BW
++	(5250 - 5350 @ 80), (24), DFS, AUTO-BW
++	(5470 - 5600 @ 80), (24), DFS
++	(5650 - 5730 @ 80), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++# Source:
++# http://www.art-rca.org
++country CF: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 40), (17)
++	(5250 - 5330 @ 40), (24), DFS
++	(5490 - 5730 @ 40), (24), DFS
++	(5735 - 5835 @ 40), (30)
++
++# Source:
++# https://www.ofcomnet.ch/#/fatTable
++# Note that the maximum transmitter power can be doubled for 5250-5710MHz if
++# transmitter power control is in use: 5250-5330@23db, 5490-5710@30db
++country CH: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (23), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	(5150 - 5330 @ 80), (20), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country CI: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country CL: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5735 - 5835 @ 80), (20)
++
++country CN: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (23), AUTO-BW
++	(5250 - 5330 @ 80), (23), DFS, AUTO-BW
++	(5735 - 5835 @ 80), (30)
++	# 60 GHz band channels 1,4: 28dBm, channels 2,3: 44dBm
++	# ref: http://www.miit.gov.cn/n11293472/n11505629/n11506593/n11960250/n11960606/n11960700/n12330791.files/n12330790.pdf
++	(57240 - 59400 @ 2160), (28)
++	(59400 - 63720 @ 2160), (44)
++	(63720 - 65880 @ 2160), (28)
++
++country CO: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country CR: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 20), (17)
++	(5250 - 5330 @ 20), (24), DFS
++	(5490 - 5730 @ 20), (24), DFS
++	(5735 - 5835 @ 20), (30)
++
++# Source:
++# https://www.mincom.gob.cu/es/marco-legal
++# - Redes Informáticas
++# Resolución 127- 2011 Reglamento de Banda de frecuencias de 2,4 GHz.
++country CU: DFS-FCC
++	(2400 - 2483.5 @ 40), (200 mW)
++
++country CX: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country CY: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++# Data from http://www.ctu.eu/164/download/VOR/VOR-12-08-2005-34.pdf
++# and http://www.ctu.eu/164/download/VOR/VOR-12-05-2007-6-AN.pdf
++# Power at 5250 - 5350 MHz and 5470 - 5725 MHz can be doubled if TPC is
++# implemented.
++country CZ: DFS-ETSI
++	(2400 - 2483.5 @ 40), (100 mW)
++	(5150 - 5250 @ 80), (200 mW), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	(5250 - 5350 @ 80), (100 mW), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5470 - 5725 @ 160), (500 mW), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++# Allocation for the 2.4 GHz band (Vfg 10 / 2013, Allgemeinzuteilung von
++# Frequenzen für die Nutzung in lokalen Netzwerken; Wireless Local Area
++# Networks (WLAN-Funkanwendungen).
++# https://www.bundesnetzagentur.de/SharedDocs/Downloads/DE/Sachgebiete/Telekommunikation/Unternehmen_Institutionen/Frequenzen/Allgemeinzuteilungen/2013_10_WLAN_2,4GHz_pdf.pdf
++#
++# Allocation for the 5 GHz band (Vfg. 7 / 2010, Allgemeinzuteilung von
++# Frequenzen in den Bereichen 5150 MHz - 5350 MHz und 5470 MHz - 5725 MHz für
++# Funkanwendungen zur breitbandigen Datenübertragung, WAS/WLAN („Wireless
++# Access Systems including Wireless Local Area Networks“).
++# https://www.bundesnetzagentur.de/SharedDocs/Downloads/DE/Sachgebiete/Telekommunikation/Unternehmen_Institutionen/Frequenzen/Allgemeinzuteilungen/2010_07_WLAN_5GHz_pdf.pdf
++#
++# The ETSI EN 300 440-1 standard for short range devices in the 5 GHz band has
++# been implemented in Germany:
++# https://www.bundesnetzagentur.de/SharedDocs/Downloads/DE/Sachgebiete/Telekommunikation/Unternehmen_Institutionen/Frequenzen/Allgemeinzuteilungen/2014_69_SRD_pdf.pdf
++#
++# Allocation for the 60 GHz band (Allgemeinzuteilung von Frequenzen im
++# Bereich 57 GHz - 66 GHz für Funkanwendungen für weitbandige
++# Datenübertragungssysteme; „Multiple Gigabit WAS/RLAN Systems (MGWS)“).
++# https://www.bundesnetzagentur.de/SharedDocs/Downloads/DE/Sachgebiete/Telekommunikation/Unternehmen_Institutionen/Frequenzen/Allgemeinzuteilungen/2011_08_MGWS_pdf.pdf
++
++country DE: DFS-ETSI
++	(2400 - 2483.5 @ 40), (100 mW)
++	(5150 - 5250 @ 80), (200 mW), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	(5250 - 5350 @ 80), (100 mW), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5470 - 5725 @ 160), (500 mW), DFS, wmmrule=ETSI
++	# short range devices (ETSI EN 300 440-1)
++	(5725 - 5875 @ 80), (25 mW)
++    # ETSI ITS G5 - 802.11p
++    (5850 - 5925 @ 20), (33)
++	# 60 GHz band channels 1-4 (ETSI EN 302 567)
++	(57000 - 66000 @ 2160), (40)
++
++# Sources:
++# 5GHz: https://erhvervsstyrelsen.dk/sites/default/files/007_interface-datanet_5-6_ghz.pdf.pdf
++# 60GHz: https://erhvervsstyrelsen.dk/sites/default/files/radiograenseflader-63.pdf
++country DK: DFS-ETSI
++	(2400 - 2483.5 @ 40), (20)
++	(5150 - 5250 @ 80), (23), AUTO-BW, wmmrule=ETSI
++	(5250 - 5350 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5470 - 5725 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4 (ETSI EN 302 567)
++	(57000 - 66000 @ 2160), (40), NO-OUTDOOR
++
++# Source:
++# http://www.ntrcdom.org/index.php?option=com_content&view=category&layout=blog&id=10&Itemid=55
++country DM: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (23), DFS, AUTO-BW
++	(5735 - 5835 @ 80), (30)
++
++country DO: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (23), DFS, AUTO-BW
++	(5735 - 5835 @ 80), (30)
++
++country DZ: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5170.000 - 5250.000 @ 80.000), (23.00), AUTO-BW
++	(5250.000 - 5330.000 @ 80.000), (23.00), DFS, AUTO-BW
++	(5490.000 - 5670.000 @ 160.000), (23.00), DFS
++
++country EC: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 20), (17)
++	(5250 - 5330 @ 20), (24), DFS
++	(5490 - 5730 @ 20), (24), DFS
++	(5735 - 5835 @ 20), (30)
++
++country EE: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country EG: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 40), (20)
++	(5250 - 5330 @ 40), (20), DFS
++
++# Source:
++# Cuadro nacional de atribución de frecuencias (CNAF)
++# https://avancedigital.gob.es/espectro/Paginas/cnaf.aspx
++country ES: DFS-ETSI
++	(2400 - 2483.5 @ 40), (100 mW)
++	(5150 - 5250 @ 80), (200 mW), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	(5250 - 5350 @ 80), (100 mW), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5470 - 5725 @ 160), (500 mW), DFS, wmmrule=ETSI
++	# Short Range Devices (SRD) (ETSI EN 300 440)
++	(5725 - 5875 @ 80), (25 mW)
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country ET: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country FI: DFS-ETSI
++	(2400 - 2483.5 @ 40), (20)
++	(5150 - 5250 @ 80), (23), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	(5250 - 5350 @ 80), (20), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5470 - 5725 @ 160), (27), DFS, wmmrule=ETSI
++	# short range devices (ETSI EN 300 440-1)
++	(5725 - 5875 @ 80), (25 mW)
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country FM: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country FR: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5150 - 5250 @ 80), (23), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	(5250 - 5350 @ 80), (20), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5470 - 5725 @ 160), (27), DFS, wmmrule=ETSI
++        # short range devices (ETSI EN 300 440)
++	(5725 - 5875 @ 80), (25 mW)
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country GB: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country GD: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country GE: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (18), AUTO-BW
++	(5250 - 5330 @ 80), (18), DFS, AUTO-BW
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country GF: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country GH: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country GL: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country GP: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country GR: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country GT: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (23), DFS, AUTO-BW
++	(5735 - 5835 @ 80), (30)
++
++country GU: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 20), (17)
++	(5250 - 5330 @ 20), (24), DFS
++	(5490 - 5730 @ 20), (24), DFS
++	(5735 - 5835 @ 20), (30)
++
++country GY:
++	(2402 - 2482 @ 40), (30)
++	(5735 - 5835 @ 80), (30)
++
++country HK: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country HN: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country HR: DFS-ETSI
++	(2400 - 2483.5 @ 40), (20)
++	(5150 - 5250 @ 80), (23), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	(5250 - 5350 @ 80), (20), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5470 - 5725 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country HT: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++# http://stir.nmhh.hu/?oldal=dokumentumGeneralo&root_rendeletelem_id=3&hatalyos=1
++# http://english.nmhh.hu/cikk/297/Eljarasi_tajekoztato_a_24_GHzes_es_az_5_GHzes_savban_mukodo_berendezesek_engedelyezeserol
++# http://nmhh.hu/dokumentum/319/kis_hatotavolsagu_eszkozok_srdk.pdf
++country HU: DFS-ETSI
++	# ref: 2006/771/EK, (EU) 2017/1483, MSZ EN 300 328
++	# additionally: 100mW @ 10MHz channels, 50mW @ 5MHz (max. 10mW/MHz)
++	(2400 - 2483.5 @ 40), (20)
++	# ref: 2005/513/EK
++	# note: TPC not needed @ 5150-5250
++	(5150 - 5250 @ 80), (23), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	# note: max would be +3dB with TPC @ 5250-5725
++	(5250 - 5350 @ 80), (20), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5470 - 5725 @ 160), (27), DFS, wmmrule=ETSI
++	# "Short Range Devices (SRD)"
++	# ref: 2006/771/EK, (EU) 2017/1483, MSZ EN 300 440, MSZ EN 302 064
++	(5725 - 5875 @ 80), (25 mW)
++	# 60 GHz band channels 1-4, "Fixed outdoor installation not allowed"
++	# ref: 2006/771/EK, (EU) 2017/1483, MSZ EN 302 567
++	(57000 - 66000 @ 2160), (40), NO-OUTDOOR
++
++country ID: DFS-JP
++	# ref: http://www.postel.go.id/content/ID/regulasi/standardisasi/kepdir/bwa%205,8%20ghz.pdf
++	(2402 - 2482 @ 20), (20)
++	(5735 - 5815 @ 20), (23)
++
++country IE: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country IL: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5150 - 5250 @ 80), (200 mW), NO-OUTDOOR, AUTO-BW
++	(5250 - 5350 @ 80), (200 mW), NO-OUTDOOR, DFS, AUTO-BW
++
++country IN:
++	(2402 - 2482 @ 40), (20)
++	(5150 - 5250 @ 80), (30)
++	(5250 - 5350 @ 80), (24)
++	(5470 - 5725 @ 160), (24)
++	(5725 - 5875 @ 80), (30)
++
++country IR: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5735 - 5835 @ 80), (30)
++
++country IS: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country IT: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country JM: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country JO: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (23)
++	(5735 - 5835 @ 80), (23)
++
++country JP: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(2474 - 2494 @ 20), (20), NO-OFDM
++	(4910 - 4990 @ 40), (23)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (23), DFS
++	# 60 GHz band channels 2-4 at 10mW,
++	# ref: http://www.arib.or.jp/english/html/overview/doc/1-STD-T74v1_1.pdf
++	(57000 - 66000 @ 2160), (10 mW)
++
++country KE: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (23)
++	(5490 - 5570 @ 80), (30), DFS
++	(5735 - 5775 @ 40), (23)
++
++country KH: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++# Source
++# http://ntrc.kn/?page_id=7
++country KN: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (30), DFS
++	(5735 - 5815 @ 80), (30)
++
++country KP: DFS-JP
++	(2402 - 2482 @ 20), (20)
++	(5170 - 5250 @ 20), (20)
++	(5250 - 5330 @ 20), (20), DFS
++	(5490 - 5630 @ 20), (30), DFS
++	(5735 - 5815 @ 20), (30)
++
++country KR: DFS-JP
++	# ref: https://www.rra.go.kr
++	(2400 - 2483.5 @ 40), (23)
++	(5150 - 5250 @ 80), (23), AUTO-BW
++	(5250 - 5350 @ 80), (20), DFS, AUTO-BW
++	(5470 - 5725 @ 160), (20), DFS
++	(5725 - 5835 @ 80), (23)
++	# 60 GHz band channels 1-4,
++	# ref: http://www.law.go.kr/%ED%96%89%EC%A0%95%EA%B7%9C%EC%B9%99/%EB%AC%B4%EC%84%A0%EC%84%A4%EB%B9%84%EA%B7%9C%EC%B9%99
++	(57000 - 66000 @ 2160), (43)
++
++country KW: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++
++country KY: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++# Source:
++# http://mic.gov.kz/sites/default/files/pages/pravila_prisvoeniya_polos_chastot_no34.pdf
++# http://adilet.zan.kz/rus/docs/P000001379_
++country KZ: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5150 - 5250 @ 80), (20), NO-OUTDOOR, AUTO-BW
++	(5250 - 5350 @ 80), (20), NO-OUTDOOR, DFS, AUTO-BW
++	(5470 - 5725 @ 80), (20), NO-OUTDOOR, DFS
++
++country LB: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++# Source:
++# http://www.ntrc.org.lc/operational_structures.htm
++country LC: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (30), DFS
++	(5735 - 5815 @ 80), (30)
++
++# Source:
++# https://www.ofcomnet.ch/#/fatTable
++# Note that the maximum transmitter power can be doubled for 5250-5710MHz if
++# transmitter power control is in use: 5250-5330@23db, 5490-5710@30db
++country LI: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (23), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	(5150 - 5330 @ 80), (20), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country LK: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 20), (17)
++	(5250 - 5330 @ 20), (24), DFS
++	(5490 - 5730 @ 20), (24), DFS
++	(5735 - 5835 @ 20), (30)
++
++# Source:
++# http://lca.org.ls/images/documents/lesotho_national_frequency_allocation_plan.pdf
++country LS: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country LT: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country LU: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country LV: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country MA: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++
++country MC: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++# Source:
++# http://www.cnfr.md/index.php?pag=sec&id=117&l=en
++country MD: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++# Source:
++# http://www.cept.org/files/1050/Tools%20and%20Services/EFIS%20-%20ECO%20Frequency%20Information%20System/National%20frequency%20tables/Montenegro%20NAFT%20-%202010.pdf
++country ME: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country MF: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country MH: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country MK: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country MN: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country MO: DFS-FCC
++	(2402 - 2482 @ 40), (23)
++	(5170 - 5250 @ 80), (23), AUTO-BW
++	(5250 - 5330 @ 80), (23), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (30), DFS
++	(5735 - 5835 @ 80), (30)
++
++country MP: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country MQ: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++# Source:
++# http://www.are.mr/pdfs/telec_freq_TNAbf_2010.pdf
++country MR: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country MT: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country MU: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++# Source:
++# http://www.cam.gov.mv/docs/tech_standards/TAM-TS-100-2004-WLAN.pdf
++country MV: DFS-ETSI
++	(2400 - 2483.5 @ 40), (100 mW)
++	(5150 - 5250 @ 80), (200 mW), AUTO-BW
++	(5250 - 5350 @ 80), (100 mW), DFS, AUTO-BW
++	(5725 - 5850 @ 80), (100 mW)
++
++country MW: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country MX: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country MY: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5650 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (24)
++
++country NG: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5250 - 5330 @ 80), (30), DFS
++	(5735 - 5835 @ 80), (30)
++
++country NI: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++# Regulation on the use of frequency space without a license and
++# without notification 2015
++#
++# http://wetten.overheid.nl/BWBR0036378/2015-03-05
++
++country NL: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# short range devices (ETSI EN 300 440-1)
++	(5725 - 5875 @ 80), (25 mW)
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++# Data from http://www.lovdata.no/dokument/SF/forskrift/2012-01-19-77
++# Power at 5250 - 5350 MHz, 5470 - 5725 MHz and 5815 – 5850 MHz can
++# be doubled if TPC is implemented.
++# Up to 2W (or 4W with TPC) is allowed in the 5725 – 5795 MHz band
++# which has been merged with 5470 - 5725 MHz to allow wide channels
++country NO: DFS-ETSI
++	(2400 - 2483.5 @ 40), (100 mW)
++	(5150 - 5250 @ 80), (200 mW), AUTO-BW, wmmrule=ETSI
++	(5250 - 5350 @ 80), (100 mW), DFS, AUTO-BW, wmmrule=ETSI
++	(5470 - 5795 @ 160), (500 mW), DFS, wmmrule=ETSI
++	(5815 - 5850 @ 35), (2000 mW), DFS
++	(17100 - 17300 @ 200), (100 mW)
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country NP: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5735 - 5835 @ 80), (20)
++
++country NZ: DFS-ETSI
++	(2402 - 2482 @ 40), (30)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country OM: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++# Source:
++# http://www.asep.gob.pa/images/telecomunicaciones/Anexos/PNAF-dic2015.pdf
++country PA: DFS-FCC
++	(2400 - 2483.5 @ 40), (36)
++	(5150 - 5250 @ 80), (36), AUTO-BW
++	(5250 - 5350 @ 80), (30), AUTO-BW
++	(5470 - 5725 @ 160), (30)
++	(5725 - 5850 @ 80), (36)
++	(57000 - 64000 @ 2160), (43)
++
++country PE: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country PF: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country PG: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country PH: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country PK: DFS-JP
++	(2402 - 2482 @ 40), (20)
++	(5735 - 5835 @ 80), (30)
++
++country PL: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country PM: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country PR: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country PT: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# short range devices (ETSI EN 300 440-1)
++	(5725 - 5875 @ 80), (25 mW)
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country PW: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country PY: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country QA: DFS-ETSI
++	(2400 - 2483.5 @ 40), (100 mW), NO-OUTDOOR
++	(5150 - 5250 @ 80), (200 mW), NO-OUTDOOR, AUTO-BW
++	(5250 - 5350 @ 80), (200 mW), NO-OUTDOOR, DFS, AUTO-BW
++	(5470 - 5725 @ 160), (100 mW), NO-OUTDOOR, DFS
++	(5725 - 5875 @ 80), (100 mW), NO-OUTDOOR, DFS
++	(57000 - 66000 @ 2160), (40), NO-OUTDOOR
++
++country RE: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country RO: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++
++# Source:
++# http://www.ratel.rs/upload/documents/Plan_namene/Plan_namene-sl_glasnik.pdf
++country RS: DFS-ETSI
++	(2400 - 2483.5 @ 40), (100 mW)
++	(5150 - 5350 @ 40), (200 mW), NO-OUTDOOR
++	(5470 - 5725 @ 20), (1000 mW), DFS
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country RU: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5650 - 5730 @ 80), (30), DFS
++	(5735 - 5835 @ 80), (30)
++	# 60 GHz band channels 1-4, ref: Changes to NLA 124_Order №129_22042015.pdf
++	(57000 - 66000 @ 2160), (40)
++
++country RW: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country SA: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++# Source:
++# https://pts.se/globalassets/startpage/dokument/legala-dokument/foreskrifter/radio/beslutade_ptsfs-2018-3-undantagsforeskrifter.pdf
++country SE: DFS-ETSI
++	(2400 - 2483.5 @ 40), (20)
++	(5150 - 5250 @ 80), (23), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
++	# note: max would be +3dB with TPC @ 5250-5725
++	(5250 - 5350 @ 80), (20), NO-OUTDOOR, DFS, AUTO-BW, wmmrule=ETSI
++	(5470 - 5725 @ 160), (27), DFS, wmmrule=ETSI
++	# short range devices (ETSI EN 300 440)
++	(5725 - 5875 @ 80), (25 mW)
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40), NO-OUTDOOR
++
++# Source
++# https://www.imda.gov.sg/~/media/imda/files/regulation%20licensing%20and%20consultations/ict%20standards/telecommunication%20standards/radio-comms/imdatssrd.pdf?la=en
++# page 12-14
++# The EIRP for 5250 – 5350 can be increased by 3dB if TPC is implemented.
++country SG: DFS-FCC
++	(2400 - 2483.5 @ 40), (23)
++	(5150 - 5250 @ 80), (23), AUTO-BW
++	(5250 - 5350 @ 80), (20), DFS, AUTO-BW
++	# 5470 - 5725 is only allowed when TPC is implemented
++	# (5470 - 5725 @ 160), (30), DFS
++	(5725 - 5850 @ 80), (30)
++
++country SI: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country SK: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++# Source:
++# Regulation N° 2004-005 ART/DG/DRC/D.Rég
++country SN: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country SR: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country SV: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 20), (17)
++	(5250 - 5330 @ 20), (23), DFS
++	(5735 - 5835 @ 20), (30)
++
++country SY:
++	(2402 - 2482 @ 40), (20)
++
++# Source:
++# http://www.telecommission.tc/Spectrum-plan20110324-101210.html
++country TC: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (24), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5730 @ 160), (24), DFS, wmmrule=ETSI
++	(5735 - 5835 @ 80), (30)
++
++country TD: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++country TG: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 40), (20)
++	(5250 - 5330 @ 40), (20), DFS
++	(5490 - 5710 @ 40), (27), DFS
++
++country TH: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country TN: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++
++# Source:
++# By-Law on Short Range Radio Devices (SRD) Oct 2015
++# https://www.btk.gov.tr/File/?path=ROOT%2f1%2fDocuments%2fOrdinance%2fBY%2DLAW%20ON%20SHORT%20RANGE%20DEVICES.pdf
++# Article 8
++country TR: DFS-ETSI
++	(2400 - 2483.5 @ 40), (20)
++	(5170 - 5250 @ 80), (23), NO-OUTDOOR, AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, NO-OUTDOOR, AUTO-BW
++	(5470 - 5725 @ 160), (27), DFS
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country TT: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++# Source:
++# Table of Frequency Allocations of Republic of China (Taiwan) / Feb 2017:
++#   https://www.motc.gov.tw/websitedowndoc?file=post/201702221012200.doc& \
++#	filedisplay=Table%2Bof%2Bradio%2Bfrequency%2Ballocation.doc
++# LP0002 Low-power Radio-frequency Devices Technical Regulations / 23 Aug 2016:
++#   http://www.ncc.gov.tw/english/show_file.aspx?table_name=news&file_sn=681
++country TW: DFS-FCC
++	# 2.4g band, LP0002 section 3.10.1
++	(2400 - 2483.5 @ 40), (30)
++	# 5g U-NII band, LP0002 section 4.7
++	# 5.15 ~ 5.25 GHz: 30 dBm for master mode, 23 dBm for clients
++	(5150 - 5250 @ 80), (23), AUTO-BW
++	(5250 - 5350 @ 80), (23), DFS, AUTO-BW
++	(5470 - 5725 @ 160), (23), DFS
++	(5725 - 5850 @ 80), (30)
++	# 60g band, LP0002 section 3.13.1.1 (3)(C), EIRP=40dBm(43dBm peak)
++	(57000 - 66000 @ 2160), (40)
++ 
++country TZ:
++	(2402 - 2482 @ 40), (20)
++	(5735 - 5835 @ 80), (30)
++
++# Source:
++# #914 / 06 Sep 2007: http://www.ucrf.gov.ua/uk/doc/nkrz/1196068874
++# #1174 / 23 Oct 2008: http://www.nkrz.gov.ua/uk/activities/ruling/1225269361
++# (appendix 8)
++# Listed 5GHz range is a lowest common denominator for all related
++# rules in the referenced laws. Such a range is used because of
++# disputable definitions there.
++country UA: DFS-ETSI
++	(2400 - 2483.5 @ 40), (20), NO-OUTDOOR
++	(5150 - 5250 @ 80), (20), NO-OUTDOOR, AUTO-BW
++	(5250 - 5350 @ 80), (20), DFS, NO-OUTDOOR, AUTO-BW
++	(5490 - 5670 @ 160), (20), DFS
++	(5735 - 5835 @ 80), (20)
++	# 60 GHz band channels 1-4, ref: Etsi En 302 567
++	(57000 - 66000 @ 2160), (40)
++
++country UG: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country US: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	# 5.15 ~ 5.25 GHz: 30 dBm for master mode, 23 dBm for clients
++	(5170 - 5250 @ 80), (23), AUTO-BW
++	(5250 - 5330 @ 80), (23), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (23), DFS
++	(5735 - 5835 @ 80), (30)
++	# 60g band
++	# reference: section IV-D https://docs.fcc.gov/public/attachments/FCC-16-89A1.pdf
++	# channels 1-6 EIRP=40dBm(43dBm peak)
++	(57240 - 71000 @ 2160), (40)
++
++country UY: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (23), AUTO-BW
++	(5250 - 5330 @ 80), (23), DFS, AUTO-BW
++	(5735 - 5835 @ 80), (30)
++
++# Source:
++# http://cemc.uz/article/1976/
++country UZ: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++
++# Source:
++# http://www.ntrc.vc/regulations/Jun_2006_Spectrum_Managment_Regulations.pdf
++country VC: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
++# Source:
++# Official Gazette (Gaceta Oficial) concerning Unlicensed transmitter use
++# (10 June 2013)
++# http://www.conatel.gob.ve/
++country VE: DFS-FCC
++	(2402 - 2482 @ 40), (30)
++	(5170 - 5250 @ 80), (23), AUTO-BW
++	(5250 - 5330 @ 80), (23), DFS, AUTO-BW
++	(5735 - 5835 @ 80), (30)
++
++country VI: DFS-FCC
++	(2402 - 2472 @ 40), (30)
++	(5170 - 5250 @ 80), (24), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country VN: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17)
++	(5250 - 5330 @ 80), (24), DFS
++	(5490 - 5730 @ 80), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++# Source:
++# http://www.trr.vu/attachments/category/130/GURL_for_Short-range_Radiocommunication_Devices2.pdf
++country VU: DFS-FCC
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (17), AUTO-BW
++	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
++	(5490 - 5730 @ 160), (24), DFS
++	(5735 - 5835 @ 80), (30)
++
++country WF: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country WS: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 40), (20)
++	(5250 - 5330 @ 40), (20), DFS
++	(5490 - 5710 @ 40), (27), DFS
++
++country YE:
++	(2402 - 2482 @ 40), (20)
++
++country YT: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW, wmmrule=ETSI
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW, wmmrule=ETSI
++	(5490 - 5710 @ 160), (27), DFS, wmmrule=ETSI
++
++country ZA: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (30)
++
++country ZW: DFS-ETSI
++	(2402 - 2482 @ 40), (20)
++	(5170 - 5250 @ 80), (20), AUTO-BW
++	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
++	(5490 - 5710 @ 160), (27), DFS
++
+diff --git a/lib/openWRT/package/kernel/mac80211/patches/ath/998-ath5k_ocb.patch b/lib/openWRT/package/kernel/mac80211/patches/ath/998-ath5k_ocb.patch
+new file mode 100644
+index 0000000000..7405057a61
+--- /dev/null
++++ b/lib/openWRT/package/kernel/mac80211/patches/ath/998-ath5k_ocb.patch
+@@ -0,0 +1,173 @@
++Author: Florian Klingler <klingler@ccs-labs.org>
++Date:   Thu Mar 30 16:32:13 2017 +0200
++
++    OCB Mode for ath5k - initial version
++
++--- a/drivers/net/wireless/ath/ath5k/base.c
+++++ b/drivers/net/wireless/ath/ath5k/base.c
++@@ -287,6 +287,8 @@ static bool ath5k_is_standard_channel(short chan, enum nl80211_band band)
++ 		((chan & 3) == 1 && chan >= 149 && chan <= 165) ||
++ 		/* 802.11j 5.030-5.080 GHz (20MHz) */
++ 		(chan == 8 || chan == 12 || chan == 16) ||
+++		/* 802.11p (10MHz) */
+++		(chan == 172) || (chan == 174) || (chan == 176) || (chan == 178) || (chan == 180) || (chan == 182) || (chan == 184) ||
++ 		/* 802.11j 4.9GHz (20MHz) */
++ 		(chan == 184 || chan == 188 || chan == 192 || chan == 196));
++ }
++@@ -1065,6 +1067,13 @@ static enum ath5k_pkt_type get_hw_packet_type(struct sk_buff *skb)
++ 		qi.tqi_aifs = 0;
++ 		qi.tqi_cw_min = 0;
++ 		qi.tqi_cw_max = 2 * AR5K_TUNE_CWMIN;
+++	} else if (ah->opmode == NL80211_IFTYPE_OCB) {
+++		/*
+++		 * Adhoc mode; backoff between 0 and (2 * cw_min).
+++		 */
+++		qi.tqi_aifs = 0;
+++		qi.tqi_cw_min = 0;
+++		qi.tqi_cw_max = 2 * AR5K_TUNE_CWMIN;
++ 	}
++ 
++ 	ATH5K_DBG(ah, ATH5K_DEBUG_BEACON,
++@@ -1433,7 +1442,7 @@ static int ath5k_remove_padding(struct sk_buff *skb)
++ 		ewma_beacon_rssi_add(&ah->ah_beacon_rssi_avg, rs->rs_rssi);
++ 
++ 		/* check beacons in IBSS mode */
++-		if (ah->opmode == NL80211_IFTYPE_ADHOC)
+++		if (ah->opmode == NL80211_IFTYPE_ADHOC || ah->opmode == NL80211_IFTYPE_OCB)
++ 			ath5k_check_ibss_tsf(ah, skb, rxs);
++ 	}
++ 
++@@ -1834,7 +1843,7 @@ static int ath5k_remove_padding(struct sk_buff *skb)
++ 	antenna = ah->ah_tx_ant;
++ 
++ 	flags = AR5K_TXDESC_NOACK;
++-	if (ah->opmode == NL80211_IFTYPE_ADHOC && ath5k_hw_hasveol(ah)) {
+++	if ((ah->opmode == NL80211_IFTYPE_ADHOC || ah->opmode == NL80211_IFTYPE_OCB) && ath5k_hw_hasveol(ah)) {
++ 		ds->ds_link = bf->daddr;	/* self-linked */
++ 		flags |= AR5K_TXDESC_VEOL;
++ 	} else
++@@ -2164,7 +2173,7 @@ static int ath5k_remove_padding(struct sk_buff *skb)
++ 
++ 		ah->imask |= AR5K_INT_SWBA;
++ 
++-		if (ah->opmode == NL80211_IFTYPE_ADHOC) {
+++		if (ah->opmode == NL80211_IFTYPE_ADHOC || ah->opmode == NL80211_IFTYPE_OCB) {
++ 			if (ath5k_hw_hasveol(ah))
++ 				ath5k_beacon_send(ah);
++ 		} else
++@@ -2190,7 +2199,7 @@ static void ath5k_tasklet_beacon(unsigned long data)
++ 	 * transmission time) in order to detect whether
++ 	 * automatic TSF updates happened.
++ 	 */
++-	if (ah->opmode == NL80211_IFTYPE_ADHOC) {
+++	if (ah->opmode == NL80211_IFTYPE_ADHOC || ah->opmode == NL80211_IFTYPE_OCB) {
++ 		/* XXX: only if VEOL supported */
++ 		u64 tsf = ath5k_hw_get_tsf64(ah);
++ 		ah->nexttbtt += ah->bintval;
++@@ -2548,7 +2557,8 @@ static void ath5k_tasklet_beacon(unsigned long data)
++ 		BIT(NL80211_IFTYPE_AP) |
++ 		BIT(NL80211_IFTYPE_STATION) |
++ 		BIT(NL80211_IFTYPE_ADHOC) |
++-		BIT(NL80211_IFTYPE_MESH_POINT);
+++		BIT(NL80211_IFTYPE_MESH_POINT) |
+++		BIT(NL80211_IFTYPE_OCB);
++ 
++ 	hw->wiphy->iface_combinations = &if_comb;
++ 	hw->wiphy->n_iface_combinations = 1;
++
++--- a/drivers/net/wireless/ath/ath5k/mac80211-ops.c
+++++ b/drivers/net/wireless/ath/ath5k/mac80211-ops.c
++@@ -80,7 +80,8 @@
++ 	mutex_lock(&ah->lock);
++ 
++ 	if ((vif->type == NL80211_IFTYPE_AP ||
++-	     vif->type == NL80211_IFTYPE_ADHOC)
+++	     vif->type == NL80211_IFTYPE_ADHOC ||
+++		 vif->type == NL80211_IFTYPE_OCB)
++ 	    && (ah->num_ap_vifs + ah->num_adhoc_vifs) >= ATH_BCBUF) {
++ 		ret = -ELNRNG;
++ 		goto end;
++@@ -103,6 +105,7 @@
++ 	case NL80211_IFTYPE_STATION:
++ 	case NL80211_IFTYPE_ADHOC:
++ 	case NL80211_IFTYPE_MESH_POINT:
+++	case NL80211_IFTYPE_OCB:
++ 		avf->opmode = vif->type;
++ 		break;
++ 	default:
++@@ -116,7 +119,8 @@
++ 	/* Assign the vap/adhoc to a beacon xmit slot. */
++ 	if ((avf->opmode == NL80211_IFTYPE_AP) ||
++ 	    (avf->opmode == NL80211_IFTYPE_ADHOC) ||
++-	    (avf->opmode == NL80211_IFTYPE_MESH_POINT)) {
+++	    (avf->opmode == NL80211_IFTYPE_MESH_POINT) ||
+++		(avf->opmode == NL80211_IFTYPE_OCB)) {
++ 		int slot;
++ 
++ 		WARN_ON(list_empty(&ah->bcbuf));
++@@ -139,6 +143,8 @@
++ 			ah->num_adhoc_vifs++;
++ 		else if (avf->opmode == NL80211_IFTYPE_MESH_POINT)
++ 			ah->num_mesh_vifs++;
+++		else if (avf->opmode == NL80211_IFTYPE_OCB)
+++			ah->num_mesh_vifs++;
++ 	}
++ 
++ 	/* Any MAC address is fine, all others are included through the
++@@ -182,6 +188,8 @@
++ 		ah->num_adhoc_vifs--;
++ 	else if (avf->opmode == NL80211_IFTYPE_MESH_POINT)
++ 		ah->num_mesh_vifs--;
+++	else if (avf->opmode == NL80211_IFTYPE_OCB)
+++		ah->num_mesh_vifs--;
++ 
++ 	ath5k_update_bssid_mask_and_opmode(ah, NULL);
++ 	mutex_unlock(&ah->lock);
++@@ -431,6 +439,10 @@
++ 		rfilt |= AR5K_RX_FILTER_PROBEREQ |
++ 			 AR5K_RX_FILTER_BEACON;
++ 		break;
+++	case NL80211_IFTYPE_OCB:
+++		rfilt |= AR5K_RX_FILTER_PROBEREQ |
+++			 AR5K_RX_FILTER_BEACON;
+++		break;
++ 	case NL80211_IFTYPE_STATION:
++ 		if (ah->assoc)
++ 			rfilt |= AR5K_RX_FILTER_BEACON;
++@@ -638,7 +650,7 @@
++ 	 * in IBSS mode we need to update the beacon timers too.
++ 	 * this will also reset the TSF if we call it with 0
++ 	 */
++-	if (ah->opmode == NL80211_IFTYPE_ADHOC)
+++	if (ah->opmode == NL80211_IFTYPE_ADHOC || ah->opmode == NL80211_IFTYPE_OCB)
++ 		ath5k_beacon_update_timers(ah, 0);
++ 	else
++ 		ath5k_hw_reset_tsf(ah);
++
++--- a/drivers/net/wireless/ath/ath5k/pcu.c
+++++ b/drivers/net/wireless/ath/ath5k/pcu.c
++@@ -670,6 +670,7 @@
++ 		/* Mark associated AP as PCF incapable for now */
++ 		AR5k_REG_DISABLE_BITS(ah, AR5K_STA_ID1, AR5K_STA_ID1_PCF);
++ 		break;
+++	case NL80211_IFTYPE_OCB:
++ 	case NL80211_IFTYPE_ADHOC:
++ 		AR5K_REG_ENABLE_BITS(ah, AR5K_TXCFG, AR5K_TXCFG_ADHOC_BCN_ATIM);
++ 		/* fall through */
++@@ -898,6 +900,15 @@
++ 			AR5K_REG_ENABLE_BITS(ah, AR5K_CFG, AR5K_CFG_IBSS);
++ 		break;
++ 
+++	case NL80211_IFTYPE_OCB:
+++		pcu_reg |= AR5K_STA_ID1_ADHOC | AR5K_STA_ID1_KEYSRCH_MODE;
+++		beacon_reg |= AR5K_BCR_ADHOC;
+++		if (ah->ah_version == AR5K_AR5210)
+++			pcu_reg |= AR5K_STA_ID1_NO_PSPOLL;
+++		else
+++			AR5K_REG_ENABLE_BITS(ah, AR5K_CFG, AR5K_CFG_IBSS);
+++		break;
+++
++ 	case NL80211_IFTYPE_AP:
++ 	case NL80211_IFTYPE_MESH_POINT:
++ 		pcu_reg |= AR5K_STA_ID1_AP | AR5K_STA_ID1_KEYSRCH_MODE;
++
+diff --git a/lib/openWRT/package/kernel/mac80211/patches/ath/999-ath9k_allow_11p.patch b/lib/openWRT/package/kernel/mac80211/patches/ath/999-ath9k_allow_11p.patch
+new file mode 100644
+index 0000000000..16e1d863fb
+--- /dev/null
++++ b/lib/openWRT/package/kernel/mac80211/patches/ath/999-ath9k_allow_11p.patch
+@@ -0,0 +1,74 @@
++From: Florian Klingler <klingler@ccs-labs.org>
++Date:   Wed Mar 15 17:50:09 2017 +0100
++
++Subject: ath9k: allow IEEE 802.11p channels (5.9 GHz)
++
++--- a/drivers/net/wireless/ath/ath9k/common-init.c
+++++ b/drivers/net/wireless/ath/ath9k/common-init.c
++@@ -86,6 +86,26 @@ static const struct ieee80211_channel ath9k_5ghz_chantable[] = {
++ 	CHAN5G(5785, 35), /* Channel 157 */
++ 	CHAN5G(5805, 36), /* Channel 161 */
++ 	CHAN5G(5825, 37), /* Channel 165 */
+++
+++	CHAN5G(5850, 38), /* Channel 170 */
+++	/* ITA-G5B */
+++	CHAN5G(5855, 39), /* Channel 171 */
+++	CHAN5G(5860, 40), /* Channel 172 */
+++	CHAN5G(5865, 41), /* Channel 173 */
+++	CHAN5G(5870, 42), /* Channel 174 */
+++	/* ITS-G5A */
+++	CHAN5G(5875, 43), /* Channel 175 */
+++	CHAN5G(5880, 44), /* Channel 176 */
+++	CHAN5G(5885, 45), /* Channel 177 */
+++	CHAN5G(5890, 46), /* Channel 178 */
+++	CHAN5G(5895, 47), /* Channel 179 */
+++	CHAN5G(5900, 48), /* Channel 180 */
+++	CHAN5G(5905, 49), /* Channel 181 */
+++	/* ITS-G5D */
+++	CHAN5G(5910, 50), /* Channel 182 */
+++	CHAN5G(5915, 51), /* Channel 183 */
+++	CHAN5G(5920, 52), /* Channel 184 */
+++	CHAN5G(5925, 53), /* Channel 185 */
++ };
++ 
++ /* Atheros hardware rate code addition for short premble */
++--- a/drivers/net/wireless/ath/ath9k/hw.h
+++++ b/drivers/net/wireless/ath/ath9k/hw.h
++@@ -74,7 +74,7 @@
++ 
++ #define ATH9K_RSSI_BAD			-128
++ 
++-#define ATH9K_NUM_CHANNELS	38
+++#define ATH9K_NUM_CHANNELS	54
++ 
++ /* Register read/write primitives */
++ #define REG_WRITE(_ah, _reg, _val) \
++--- a/drivers/net/wireless/ath/regd.c
+++++ b/drivers/net/wireless/ath/regd.c
++@@ -46,9 +46,9 @@ static int __ath_regd_init(struct ath_regulatory *reg);
++ #define ATH9K_5GHZ_5150_5350	REG_RULE(5150-10, 5240+10, 80, 0, 30, 0),\
++ 				REG_RULE(5260-10, 5350+10, 80, 0, 30,\
++ 					 NL80211_RRF_NO_IR)
++-#define ATH9K_5GHZ_5470_5850	REG_RULE(5470-10, 5850+10, 80, 0, 30,\
+++#define ATH9K_5GHZ_5470_5925	REG_RULE(5470-10, 5925+10, 80, 0, 30,\
++ 					 NL80211_RRF_NO_IR)
++-#define ATH9K_5GHZ_5725_5850	REG_RULE(5725-10, 5850+10, 80, 0, 30,\
+++#define ATH9K_5GHZ_5725_5925	REG_RULE(5725-10, 5925+10, 80, 0, 30,\
++ 					 NL80211_RRF_NO_IR)
++ 
++ #define ATH9K_2GHZ_ALL		ATH9K_2GHZ_CH01_11, \
++@@ -56,11 +56,11 @@ static int __ath_regd_init(struct ath_regulatory *reg);
++ 				ATH9K_2GHZ_CH14
++ 
++ #define ATH9K_5GHZ_ALL		ATH9K_5GHZ_5150_5350, \
++-				ATH9K_5GHZ_5470_5850
+++				ATH9K_5GHZ_5470_5925
++ 
++ /* This one skips what we call "mid band" */
++ #define ATH9K_5GHZ_NO_MIDBAND	ATH9K_5GHZ_5150_5350, \
++-				ATH9K_5GHZ_5725_5850
+++				ATH9K_5GHZ_5725_5925
++ 
++ #define REGD_RULES(...) \
++ 	.reg_rules = { __VA_ARGS__ }, \
++ 
+diff --git a/lib/openWRT/package/kernel/mac80211/patches/ath/999-ath9k_configure_channel_sensing.patch b/lib/openWRT/package/kernel/mac80211/patches/ath/999-ath9k_configure_channel_sensing.patch
+new file mode 100644
+index 0000000000..07c914b256
+--- /dev/null
++++ b/lib/openWRT/package/kernel/mac80211/patches/ath/999-ath9k_configure_channel_sensing.patch
+@@ -0,0 +1,935 @@
++--- a/drivers/net/wireless/ath/ath9k/debug.c
+++++ b/drivers/net/wireless/ath/ath9k/debug.c
++@@ -26,6 +26,67 @@
++ #define REG_READ_D(_ah, _reg) \
++ 	ath9k_hw_common(_ah)->ops->read((_ah), (_reg))
++ 
+++
+++/* Code from drivers/net/wireless/ath/ath9k/htc_drv_debug.c of the following repository https://github.com/vanhoefm/modwifi-linux
+++ * Modified by Mario Franke */
+++#include "hw.h"
+++
+++typedef u32 (*GetTimeFunc)(struct ath_hw *ah);
+++typedef void (*SetTimeFunc)(struct ath_hw *ah, u32 us);
+++
+++struct time_func {
+++	const char *name;
+++	GetTimeFunc getter;
+++	SetTimeFunc setter;
+++	const char *comments;
+++};
+++
+++struct time_func_context {
+++	struct time_func *timefunc;
+++	struct ath_softc *htcpriv;
+++};
+++
+++struct time_func timefunctions[] =
+++{
+++	{"time_sifs",		ath9k_hw_get_sifs_time,		ath9k_hw_set_sifs_time,
+++		"SIFS time in microseconds (us) = Rx/Tx time = required time to wait after Rx."},
+++	{"time_slottime",	ath9k_hw_getslottime,		ath9k_hw_setslottime,
+++		"Slot time (aSlotTime) in microseconds (us) = slot time as used in backoff algo."},
+++	{"time_ack_timeout",	ath9k_hw_get_ack_timeout,	ath9k_hw_set_ack_timeout,
+++		"ACK timeout in microseconds (us)"},
+++	{"time_cts_timeout",	ath9k_hw_get_cts_timeout,	ath9k_hw_set_cts_timeout,
+++		"CTS timeout in microseconds (us)"},
+++	{"time_eifs",		ath9k_hw_get_eifs_timeout,	ath9k_hw_set_eifs_timeout,
+++		"EIFS time in microseconds (us)"}
+++};
+++
+++struct reg_ops registers[] = {
+++	// Backoff parameters
+++	{"ifs_cwmin_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_CWMIN,
+++		"Backoff behaviour (queue 0): CW_MIN is the minimum number of time slots to wait."},
+++	{"ifs_cwmax_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_CWMAX,
+++		"Backoff behaviour (queue 0): CW_MAX is the maximum number of time slots to wait."},
+++	{"ifs_aifs_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_AIFS,
+++		"AIFS (in number of aSlotTime's) for queue 0."},
+++	// Disable backoff
+++	{"ifs_ignore_backoff",		AR_D_GBL_IFS_MISC,	AR_D_GBL_IFS_MISC_IGNORE_BACKOFF,
+++		"Ignore backoff (perhaps you also want to disable waiting for ACKs - see inject_noack)."},
+++	// Virtual and physical carrier sense
+++	{"ignore_virt_cs",		AR_DIAG_SW,		AR_DIAG_IGNORE_VIRT_CS,
+++		"Disables virtual carrier (cts/rts) sense when set."},
+++	{"force_channel_idle",		AR_DIAG_SW,		AR_DIAG_FORCE_CH_IDLE_HIGH,
+++		"Disables physical carrier sense (air clear) when set."},
+++	{"diag_rx_disable",		AR_DIAG_SW,		AR_DIAG_RX_DIS,
+++		"Block incoming frames from being sent to the firmware."},
+++	// Other
+++	{"diag_corrupt_fcs",		AR_DIAG_SW,		AR_DIAG_CORR_FCS,
+++		"If set, every transmitted packet is given an incorrect FCS."},
+++	{"cpu_freq_pll",		0x00056000,		-1,
+++		"Value = frequency * 4 + 5 (Setting of the Phase Locked Loop)."},
+++};
+++
+++/*-----------------------------------------------------------------------------------------------------------------*/
+++
++ void ath9k_debug_sync_cause(struct ath_softc *sc, u32 sync_cause)
++ {
++ 	if (sync_cause)
++@@ -1371,6 +1432,13 @@ void ath9k_get_et_stats(struct ieee80211
++ 
++ void ath9k_deinit_debug(struct ath_softc *sc)
++ {
+++/* Code from drivers/net/wireless/ath/ath9k/htc_drv_debug.c of the following repository https://github.com/vanhoefm/modwifi-linux,
+++ * modified by Mario Franke */
+++    if (sc->debug.debugfs_phy_regs)
+++            debugfs_remove(sc->debug.debugfs_phy_regs);
+++    sc->debug.debugfs_phy_regs = NULL;
+++/*----------------------------------------------------*/
+++
++ 	ath9k_cmn_spectral_deinit_debug(&sc->spec_priv);
++ }
++ 
++@@ -1565,12 +1633,380 @@ static const struct file_operations fops
++ 	.llseek = default_llseek,
++ };
++ 
+++static ssize_t read_file_carrier_sensing_off(struct file *file, char __user *user_buf,
+++			     size_t count, loff_t *ppos)
+++{
+++	struct ath_softc *sc = file->private_data;
+++	struct ath_hw *ah = sc->sc_ah;
+++	char buf[32];
+++	unsigned int len;
+++    u32 regval;
+++
+++    // regval = REG_READ(ah, AR_D_GBL_IFS_MISC);
+++    // printk(KERN_DEBUG "AR_D_GBL_IFS_MISC value: %lx", regval);
+++    regval = REG_READ(ah, AR_DIAG_SW);
+++    printk(KERN_DEBUG "read carrier_sensing_off: AR_DIAG_SW: %lx", regval);
+++	len = sprintf(buf, "0x%08lx\n", regval);
+++	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+++}
+++
+++static ssize_t write_file_carrier_sensing_off(struct file *file, const char __user *user_buf,
+++			     size_t count, loff_t *ppos)
+++{
+++    struct ath_softc *sc = file->private_data;
+++    struct ath_hw *ah = sc->sc_ah;
+++    char buf[1];
+++
+++    if (copy_from_user(buf, user_buf, 1)){
+++        printk(KERN_DEBUG "error copying input.");
+++        return -EFAULT;
+++    }
+++
+++    // printk(KERN_DEBUG "copied to buf: %x.", buf[0]);
+++    if (buf[0] == '1') {
+++        ath9k_hw_set_carrier_sensing_off(ah, true);
+++    }else if (buf[0] == '0') {
+++        ath9k_hw_set_carrier_sensing_off(ah, false);
+++    }
+++    return count;
+++}
+++
+++static const struct file_operations fops_carrier_sensing_off = {
+++	.read = read_file_carrier_sensing_off,
+++	.write = write_file_carrier_sensing_off,
+++	.open = simple_open,
+++	.owner = THIS_MODULE,
+++	.llseek = default_llseek,
+++};
+++
+++static ssize_t read_file_halt_rx(struct file *file, char __user *user_buf,
+++			     size_t count, loff_t *ppos)
+++{
+++	struct ath_softc *sc = file->private_data;
+++	struct ath_hw *ah = sc->sc_ah;
+++	char buf[32];
+++	unsigned int len;
+++    u32 regval;
+++
+++    // regval = REG_READ(ah, AR_D_GBL_IFS_MISC);
+++    // printk(KERN_DEBUG "AR_D_GBL_IFS_MISC value: %lx", regval);
+++    regval = REG_READ(ah, AR_DIAG_SW);
+++    printk(KERN_DEBUG "read halt_rx: AR_DIAG_SW: %lx", regval);
+++	len = sprintf(buf, "0x%08lx\n", regval);
+++	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+++}
+++
+++static ssize_t write_file_halt_rx(struct file *file, const char __user *user_buf,
+++			     size_t count, loff_t *ppos)
+++{
+++    struct ath_softc *sc = file->private_data;
+++    struct ath_hw *ah = sc->sc_ah;
+++    char buf[1];
+++
+++    if (copy_from_user(buf, user_buf, 1)){
+++        printk(KERN_DEBUG "write_file_halt_rx: error copying input.");
+++        return -EFAULT;
+++    }
+++
+++    // printk(KERN_DEBUG "copied to buf: %x.", buf[0]);
+++    if (buf[0] == '1') {
+++        ath9k_hw_halt_rx(ah, true);
+++    }else if (buf[0] == '0') {
+++        ath9k_hw_halt_rx(ah, false);
+++    }
+++    return count;
+++}
+++
+++static const struct file_operations fops_halt_rx = {
+++	.read = read_file_halt_rx,
+++	.write = write_file_halt_rx,
+++	.open = simple_open,
+++	.owner = THIS_MODULE,
+++	.llseek = default_llseek,
+++};
+++
+++static ssize_t read_file_rx_clear_high(struct file *file, char __user *user_buf,
+++			     size_t count, loff_t *ppos)
+++{
+++	struct ath_softc *sc = file->private_data;
+++	struct ath_hw *ah = sc->sc_ah;
+++	char buf[32];
+++	unsigned int len;
+++    u32 regval;
+++
+++    // regval = REG_READ(ah, AR_D_GBL_IFS_MISC);
+++    // printk(KERN_DEBUG "AR_D_GBL_IFS_MISC value: %lx", regval);
+++    regval = REG_READ(ah, AR_DIAG_SW);
+++    printk(KERN_DEBUG "read rx_clear_high: AR_DIAG_SW: %lx", regval);
+++	len = sprintf(buf, "0x%08lx\n", regval);
+++	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+++}
+++
+++static ssize_t write_file_rx_clear_high(struct file *file, const char __user *user_buf,
+++			     size_t count, loff_t *ppos)
+++{
+++    struct ath_softc *sc = file->private_data;
+++    struct ath_hw *ah = sc->sc_ah;
+++    char buf[1];
+++
+++    if (copy_from_user(buf, user_buf, 1)){
+++        printk(KERN_DEBUG "write_file_rx_clear_high: error copying input.");
+++        return -EFAULT;
+++    }
+++
+++    // printk(KERN_DEBUG "copied to buf: %x.", buf[0]);
+++    if (buf[0] == '1') {
+++        ath9k_hw_rx_clear_high(ah, true);
+++    }else if (buf[0] == '0') {
+++        ath9k_hw_rx_clear_high(ah, false);
+++    }
+++    return count;
+++}
+++
+++static const struct file_operations fops_rx_clear_high = {
+++	.read = read_file_rx_clear_high,
+++	.write = write_file_rx_clear_high,
+++	.open = simple_open,
+++	.owner = THIS_MODULE,
+++	.llseek = default_llseek,
+++};
+++
+++static ssize_t read_file_ignore_nav(struct file *file, char __user *user_buf,
+++			     size_t count, loff_t *ppos)
+++{
+++	struct ath_softc *sc = file->private_data;
+++	struct ath_hw *ah = sc->sc_ah;
+++	char buf[32];
+++	unsigned int len;
+++    u32 regval;
+++
+++    // regval = REG_READ(ah, AR_D_GBL_IFS_MISC);
+++    // printk(KERN_DEBUG "AR_D_GBL_IFS_MISC value: %lx", regval);
+++    regval = REG_READ(ah, AR_DIAG_SW);
+++    printk(KERN_DEBUG "read ignore_nav: AR_DIAG_SW: %lx", regval);
+++	len = sprintf(buf, "0x%08lx\n", regval);
+++	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+++}
+++
+++static ssize_t write_file_ignore_nav(struct file *file, const char __user *user_buf,
+++			     size_t count, loff_t *ppos)
+++{
+++    struct ath_softc *sc = file->private_data;
+++    struct ath_hw *ah = sc->sc_ah;
+++    char buf[1];
+++
+++    if (copy_from_user(buf, user_buf, 1)){
+++        printk(KERN_DEBUG "write_file_ignore_nav: error copying input.");
+++        return -EFAULT;
+++    }
+++
+++    // printk(KERN_DEBUG "copied to buf: %x.", buf[0]);
+++    if (buf[0] == '1') {
+++        ath9k_hw_ignore_nav(ah, true);
+++    }else if (buf[0] == '0') {
+++        ath9k_hw_ignore_nav(ah, false);
+++    }
+++    return count;
+++}
+++
+++static const struct file_operations fops_ignore_nav = {
+++	.read = read_file_ignore_nav,
+++	.write = write_file_ignore_nav,
+++	.open = simple_open,
+++	.owner = THIS_MODULE,
+++	.llseek = default_llseek,
+++};
+++
+++static ssize_t read_file_chan_idle_high(struct file *file, char __user *user_buf,
+++			     size_t count, loff_t *ppos)
+++{
+++	struct ath_softc *sc = file->private_data;
+++	struct ath_hw *ah = sc->sc_ah;
+++	char buf[32];
+++	unsigned int len;
+++    u32 regval;
+++
+++    // regval = REG_READ(ah, AR_D_GBL_IFS_MISC);
+++    // printk(KERN_DEBUG "AR_D_GBL_IFS_MISC value: %lx", regval);
+++    regval = REG_READ(ah, AR_DIAG_SW);
+++    printk(KERN_DEBUG "read chan_idle_high: AR_DIAG_SW: %lx", regval);
+++	len = sprintf(buf, "0x%08lx\n", regval);
+++	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+++}
+++
+++static ssize_t write_file_chan_idle_high(struct file *file, const char __user *user_buf,
+++			     size_t count, loff_t *ppos)
+++{
+++    struct ath_softc *sc = file->private_data;
+++    struct ath_hw *ah = sc->sc_ah;
+++    char buf[1];
+++
+++    if (copy_from_user(buf, user_buf, 1)){
+++        printk(KERN_DEBUG "write_file_chan_idle_high: error copying input.");
+++        return -EFAULT;
+++    }
+++
+++    // printk(KERN_DEBUG "copied to buf: %x.", buf[0]);
+++    if (buf[0] == '1') {
+++        ath9k_hw_chan_idle_high(ah, true);
+++    }else if (buf[0] == '0') {
+++        ath9k_hw_chan_idle_high(ah, false);
+++    }
+++    return count;
+++}
+++
+++static const struct file_operations fops_chan_idle_high = {
+++	.read = read_file_chan_idle_high,
+++	.write = write_file_chan_idle_high,
+++	.open = simple_open,
+++	.owner = THIS_MODULE,
+++	.llseek = default_llseek,
+++};
+++
+++/* Code from drivers/net/wireless/ath/ath9k/htc_drv_debug.c of the following repository https://github.com/vanhoefm/modwifi-linux,
+++ * modified by Mario Franke */
+++static ssize_t read_file_reg_ops(struct file *file, char __user *user_buf,
+++                         size_t count, loff_t *ppos)
+++{
+++    struct reg_ops_instance *instance = file->private_data;
+++    struct ath_softc *priv = instance->owner;
+++    struct reg_ops *regops = instance->regops;
+++    char buf[512];
+++    unsigned int len;
+++    unsigned int regval, mask;
+++
+++    ath9k_ps_wakeup(priv);
+++    regval = REG_READ(priv->sc_ah, regops->address);
+++    ath9k_ps_restore(priv);
+++
+++    // apply mask, and shift according to mask
+++    regval &= regops->mask;
+++    mask = regops->mask;
+++    while ( (mask & 1) == 0) {
+++        mask >>= 1;
+++        regval >>= 1;
+++    }
+++
+++    len = snprintf(buf, sizeof(buf), "%s: %s\nValue: 0x%08X = %d (forced: %d)\n",
+++                    regops->name, regops->description, regval, regval,
+++                    !!(instance->valueset));
+++
+++    return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+++}
+++
+++static ssize_t write_file_reg_ops(struct file *file, const char __user *user_buf,
+++                            size_t count, loff_t *ppos)
+++{
+++    struct reg_ops_instance *instance = file->private_data;
+++    struct ath_softc *priv = instance->owner;
+++    struct reg_ops *regops = instance->regops;
+++    unsigned long val;
+++    char buf[32];
+++    ssize_t len;
+++    unsigned int mask, regval;
+++
+++    len = min(count, sizeof(buf) - 1);
+++    if (copy_from_user(buf, user_buf, len))
+++        return -EINVAL;
+++
+++    buf[len] = '\0';
+++    if (kstrtoul(buf, 0, &val))
+++        return -EINVAL;
+++
+++    // shift according to mask
+++    mask = regops->mask;
+++    while ( (mask & 1) == 0) {
+++        mask >>= 1;
+++        val <<= 1;
+++    }
+++
+++    // apply mask to assure we're not overwriting anything else
+++    val &= regops->mask;
+++
+++    ath9k_ps_wakeup(priv);
+++    regval = REG_READ(priv->sc_ah, regops->address);
+++    regval = (regval & ~regops->mask) | val;
+++    REG_WRITE(priv->sc_ah, regops->address, regval);
+++    ath9k_ps_restore(priv);
+++
+++    instance->valueset = 1;
+++    instance->value = val;
+++
+++    return count;
+++}
+++
+++static const struct file_operations fops_reg_ops = {
+++    .read = read_file_reg_ops,
+++    .write = write_file_reg_ops,
+++    .open = simple_open,
+++    .owner = THIS_MODULE,
+++    .llseek = default_llseek,
+++};
+++
+++static ssize_t read_file_timefunc(struct file *file, char __user *user_buf,
+++                          size_t count, loff_t *ppos)
+++{
+++    struct time_func_context *context = file->private_data;
+++    struct time_func *timefunc = context->timefunc;
+++    struct ath_softc *priv = context->htcpriv;
+++    char buf[512];
+++    unsigned int len, val;
+++
+++    // FIXME: Is the wakeup/restore call needed?
+++    ath9k_ps_wakeup(priv);
+++    val = timefunc->getter(priv->sc_ah);
+++    ath9k_ps_restore(priv);
+++
+++    len = snprintf(buf, sizeof(buf), "%s: %s\nValue: 0x%08X = %d\n",
+++    timefunc->name, timefunc->comments, val, val);
+++    return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+++}
+++
+++static ssize_t write_file_timefunc(struct file *file, const char __user *user_buf,
+++                            size_t count, loff_t *ppos)
+++    {
+++    struct time_func_context *context = file->private_data;
+++    struct time_func *timefunc = context->timefunc;
+++    struct ath_softc *priv = context->htcpriv;
+++    unsigned long val;
+++    char buf[32];
+++    ssize_t len;
+++
+++    len = min(count, sizeof(buf) - 1);
+++    if (copy_from_user(buf, user_buf, len))
+++        return -EINVAL;
+++
+++    buf[len] = '\0';
+++    if (kstrtoul(buf, 0, &val))
+++        return -EINVAL;
+++
+++    // FIXME: Is the wakeup/restore call needed?
+++    ath9k_ps_wakeup(priv);
+++    timefunc->setter(priv->sc_ah, (u32)val);
+++    ath9k_ps_restore(priv);
+++
+++    return count;
+++}
+++
+++static const struct file_operations fops_timefunc = {
+++    .read = read_file_timefunc,
+++    .write = write_file_timefunc,
+++    .open = simple_open,
+++    .owner = THIS_MODULE,
+++    .llseek = default_llseek,
+++};
+++/*-------------------------------------------------*/
++ 
++ int ath9k_init_debug(struct ath_hw *ah)
++ {
++ 	struct ath_common *common = ath9k_hw_common(ah);
++ 	struct ath_softc *sc = (struct ath_softc *) common->priv;
++ 
+++/* Code from drivers/net/wireless/ath/ath9k/htc_drv_debug.c of the following repository https://github.com/vanhoefm/modwifi-linux */
+++    struct reg_ops_instance *previnstance;
+++    int i;
+++/*-------------------------------------------------*/
+++
++ 	sc->debug.debugfs_phy = debugfs_create_dir("ath9k",
++ 						   sc->hw->wiphy->debugfsdir);
++ 	if (!sc->debug.debugfs_phy)
++@@ -1595,6 +2031,16 @@ int ath9k_init_debug(struct ath_hw *ah)
++ #endif
++ 	debugfs_create_file("diag", S_IRUSR | S_IWUSR, sc->debug.debugfs_phy,
++ 			    sc, &fops_diag);
+++	debugfs_create_file("carrier_sensing_off", S_IRUSR | S_IWUSR, sc->debug.debugfs_phy,
+++			    sc, &fops_carrier_sensing_off);
+++	// debugfs_create_file("halt_rx", S_IRUSR | S_IWUSR, sc->debug.debugfs_phy,
+++	// 		    sc, &fops_halt_rx);
+++	// debugfs_create_file("rx_clear_high", S_IRUSR | S_IWUSR, sc->debug.debugfs_phy,
+++	// 		    sc, &fops_rx_clear_high);
+++	// debugfs_create_file("ignore_nav", S_IRUSR | S_IWUSR, sc->debug.debugfs_phy,
+++	// 		    sc, &fops_ignore_nav);
+++	// debugfs_create_file("chan_idle_high", S_IRUSR | S_IWUSR, sc->debug.debugfs_phy,
+++	// 		    sc, &fops_chan_idle_high);
++ 	debugfs_create_devm_seqfile(sc->dev, "dma", sc->debug.debugfs_phy,
++ 				    read_file_dma);
++ 	debugfs_create_devm_seqfile(sc->dev, "interrupt", sc->debug.debugfs_phy,
++@@ -1635,6 +2081,63 @@ int ath9k_init_debug(struct ath_hw *ah)
++ 	ath9k_cmn_debug_base_eeprom(sc->debug.debugfs_phy, sc->sc_ah);
++ 	ath9k_cmn_debug_modal_eeprom(sc->debug.debugfs_phy, sc->sc_ah);
++ 
+++/* Code from drivers/net/wireless/ath/ath9k/htc_drv_debug.c of the following repository https://github.com/vanhoefm/modwifi-linux,
+++ * modified by Mario Franke */
+++    //
+++    // Read/write access to registers
+++    //
+++
+++    sc->debug.debugfs_phy_regs = debugfs_create_dir("registers", sc->debug.debugfs_phy);
+++    if (!sc->debug.debugfs_phy_regs)
+++        return -ENOMEM;
+++
+++    previnstance = NULL;
+++    for (i = 0; i < sizeof(registers) / sizeof(registers[0]); ++i)
+++    {
+++        struct reg_ops *regops = &registers[i];
+++        struct reg_ops_instance *instance;
+++
+++        // Allocated linked list is freed in ath9k_hw_deinit
+++        instance = kzalloc(sizeof(struct reg_ops_instance), GFP_KERNEL);
+++        if (!instance) return -ENOMEM;
+++
+++        instance->regops = regops;
+++        instance->owner = sc;
+++
+++        instance->valueset = 0;
+++        instance->value = 0;
+++        instance->next = previnstance;
+++
+++        // Read/write access using general functions
+++        debugfs_create_file(regops->name, S_IRUSR|S_IWUSR,
+++        sc->debug.debugfs_phy_regs, instance, &fops_reg_ops);
+++
+++        previnstance = instance;
+++    }
+++
+++    sc->sc_ah->modified_registers = previnstance;
+++
+++
+++    //
+++    // Time functions
+++    //
+++
+++    for (i = 0; i < sizeof(timefunctions) / sizeof(timefunctions[0]); ++i)
+++    {
+++        // Allocate a context
+++        struct time_func_context *context;
+++        context = devm_kzalloc(sc->dev, sizeof(struct time_func_context), GFP_KERNEL);
+++        if (!context) return -ENOMEM;
+++
+++        context->timefunc = &timefunctions[i];
+++        context->htcpriv = sc;
+++
+++        // Read/write access using general functions
+++        debugfs_create_file(context->timefunc->name, S_IRUSR|S_IWUSR,
+++        sc->debug.debugfs_phy, context, &fops_timefunc);
+++    }
+++/*-------------------------------------------------------------------------------------------------*/
+++
++ 	debugfs_create_u32("gpio_mask", 0600,
++ 			   sc->debug.debugfs_phy, &sc->sc_ah->gpio_mask);
++ 	debugfs_create_u32("gpio_val", 0600,
++--- a/drivers/net/wireless/ath/ath9k/hw.c
+++++ b/drivers/net/wireless/ath/ath9k/hw.c
++@@ -74,6 +74,17 @@ static u32 ath9k_hw_mac_to_clks(struct a
++ 	return usecs * common->clockrate;
++ }
++ 
+++/** This is the clockrate of the wireless chip*/
+++static u32 ath9k_hw_mac_to_usecs(struct ath_hw *ah, u32 clks)
+++{
+++    struct ath_common *common = ath9k_hw_common(ah);
+++    if (common->clockrate == 0)
+++        return 0xFFFFFFFF;
+++
+++    return clks / common->clockrate;
+++}
+++
+++
++ bool ath9k_hw_wait(struct ath_hw *ah, u32 reg, u32 mask, u32 val, u32 timeout)
++ {
++ 	int i;
++@@ -248,6 +259,24 @@ void ath9k_hw_get_channel_centers(struct
++ 		centers->synth_center + (extoff * HT40_CHANNEL_CENTER_SHIFT);
++ }
++ 
+++
+++static void ath9k_restore_registers(struct ath_hw *ah)
+++{
+++    struct reg_ops_instance *saved_reg = ah->modified_registers;
+++    int regval;
+++
+++    while (saved_reg != NULL)
+++    {
+++        if (saved_reg->valueset)
+++        {
+++            regval = REG_READ(ah, saved_reg->regops->address);
+++            regval = (regval & ~saved_reg->regops->mask) | saved_reg->value;
+++            REG_WRITE(ah, saved_reg->regops->address, regval);
+++        }
+++        saved_reg = saved_reg->next;
+++    }
+++}
+++
++ static inline void ath9k_hw_disable_pll_lock_detect(struct ath_hw *ah)
++ {
++ 	/* On AR9330 and AR9340 devices, some PHY registers must be
++@@ -1012,19 +1041,23 @@ static void ath9k_hw_init_interrupt_mask
++ 	}
++ }
++ 
++-static void ath9k_hw_set_sifs_time(struct ath_hw *ah, u32 us)
+++void ath9k_hw_set_sifs_time(struct ath_hw *ah, u32 us)
++ {
++ 	u32 val = ath9k_hw_mac_to_clks(ah, us - 2);
++-	val = min(val, (u32) 0xFFFF);
+++	//val = min(val, (u32) 0xFFFF);
+++    val &= AR_D_GBL_IFS_SIFS_M;
++ 	REG_WRITE(ah, AR_D_GBL_IFS_SIFS, val);
++ }
+++EXPORT_SYMBOL(ath9k_hw_set_sifs_time);
++ 
++ void ath9k_hw_setslottime(struct ath_hw *ah, u32 us)
++ {
++ 	u32 val = ath9k_hw_mac_to_clks(ah, us);
++-	val = min(val, (u32) 0xFFFF);
+++	// val = min(val, (u32) 0xFFFF);
+++    val &= AR_D_GBL_IFS_SLOT_M;
++ 	REG_WRITE(ah, AR_D_GBL_IFS_SLOT, val);
++ }
+++EXPORT_SYMBOL(ath9k_hw_setslottime);
++ 
++ void ath9k_hw_set_ack_timeout(struct ath_hw *ah, u32 us)
++ {
++@@ -1032,6 +1065,7 @@ void ath9k_hw_set_ack_timeout(struct ath
++ 	val = min(val, (u32) MS(0xFFFFFFFF, AR_TIME_OUT_ACK));
++ 	REG_RMW_FIELD(ah, AR_TIME_OUT, AR_TIME_OUT_ACK, val);
++ }
+++EXPORT_SYMBOL(ath9k_hw_set_ack_timeout);
++ 
++ void ath9k_hw_set_cts_timeout(struct ath_hw *ah, u32 us)
++ {
++@@ -1039,6 +1073,50 @@ void ath9k_hw_set_cts_timeout(struct ath
++ 	val = min(val, (u32) MS(0xFFFFFFFF, AR_TIME_OUT_CTS));
++ 	REG_RMW_FIELD(ah, AR_TIME_OUT, AR_TIME_OUT_CTS, val);
++ }
+++EXPORT_SYMBOL(ath9k_hw_set_cts_timeout);
+++
+++void ath9k_hw_set_eifs_timeout(struct ath_hw *ah, u32 us)
+++{
+++        u32 val = ath9k_hw_mac_to_clks(ah, us);
+++            val &= AR_D_GBL_IFS_EIFS;
+++                REG_WRITE(ah, AR_D_GBL_IFS_EIFS, val);
+++}
+++EXPORT_SYMBOL(ath9k_hw_set_eifs_timeout);
+++
+++u32 ath9k_hw_get_sifs_time(struct ath_hw *ah)
+++{
+++        u32 val = REG_READ(ah, AR_D_GBL_IFS_SIFS) & AR_D_GBL_IFS_SIFS_M;
+++            return ath9k_hw_mac_to_usecs(ah, val) + 2;
+++}
+++EXPORT_SYMBOL(ath9k_hw_get_sifs_time);
+++
+++u32 ath9k_hw_getslottime(struct ath_hw *ah)
+++{
+++        u32 val = REG_READ(ah, AR_D_GBL_IFS_SLOT) & AR_D_GBL_IFS_SLOT_M;
+++            return ath9k_hw_mac_to_usecs(ah, val);
+++}
+++EXPORT_SYMBOL(ath9k_hw_getslottime);
+++
+++u32 ath9k_hw_get_ack_timeout(struct ath_hw *ah)
+++{
+++        u32 val = MS(REG_READ(ah, AR_TIME_OUT), AR_TIME_OUT_ACK);
+++            return ath9k_hw_mac_to_usecs(ah, val);
+++}
+++EXPORT_SYMBOL(ath9k_hw_get_ack_timeout);
+++
+++u32 ath9k_hw_get_cts_timeout(struct ath_hw *ah)
+++{
+++        u32 val = MS(REG_READ(ah, AR_TIME_OUT), AR_TIME_OUT_CTS);
+++            return ath9k_hw_mac_to_usecs(ah, val);
+++}
+++EXPORT_SYMBOL(ath9k_hw_get_cts_timeout);
+++
+++u32 ath9k_hw_get_eifs_timeout(struct ath_hw *ah)
+++{
+++        u32 val = REG_READ(ah, AR_D_GBL_IFS_EIFS) & AR_D_GBL_IFS_EIFS_M;
+++            return ath9k_hw_mac_to_usecs(ah, val);
+++}
+++EXPORT_SYMBOL(ath9k_hw_get_eifs_timeout);
++ 
++ static bool ath9k_hw_set_global_txtimeout(struct ath_hw *ah, u32 tu)
++ {
++@@ -1922,6 +2000,79 @@ void ath9k_hw_update_diag(struct ath_hw
++ }
++ EXPORT_SYMBOL(ath9k_hw_update_diag);
++ 
+++void ath9k_hw_halt_rx(struct ath_hw *ah, bool value)
+++{
+++    if (value) {
+++        REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_RX_DIS);
+++        printk(KERN_DEBUG "Set bit HALT_RX");
+++    }else{
+++        REG_CLR_BIT(ah, AR_DIAG_SW, AR_DIAG_RX_DIS);
+++        printk(KERN_DEBUG "Clear bit HALT_RX");
+++    }
+++}
+++EXPORT_SYMBOL(ath9k_hw_halt_rx);
+++
+++void ath9k_hw_rx_clear_high(struct ath_hw *ah, bool value)
+++{
+++    if (value) {
+++        REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_RX_CLEAR);
+++        printk(KERN_DEBUG "Set bit RX_CLEAR_HIGH");
+++    }else{
+++        REG_CLR_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_RX_CLEAR);
+++        printk(KERN_DEBUG "Clear bit RX_CLEAR_HIGH");
+++    }
+++}
+++EXPORT_SYMBOL(ath9k_hw_rx_clear_high);
+++
+++void ath9k_hw_ignore_nav(struct ath_hw *ah, bool value)
+++{
+++    if (value) {
+++        REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_IGNORE_VIRT_CS);
+++        printk(KERN_DEBUG "Set bit IGNORE_NAV");
+++    }else{
+++        REG_CLR_BIT(ah, AR_DIAG_SW, AR_DIAG_IGNORE_VIRT_CS);
+++        printk(KERN_DEBUG "Clear bit IGNORE_NAV");
+++    }
+++}
+++EXPORT_SYMBOL(ath9k_hw_ignore_nav);
+++
+++void ath9k_hw_chan_idle_high(struct ath_hw *ah, bool value)
+++{
+++    if (value) {
+++        REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_CH_IDLE_HIGH);
+++        printk(KERN_DEBUG "Set bit CHAN_IDLE_HIGH");
+++    }else{
+++        REG_CLR_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_CH_IDLE_HIGH);
+++        printk(KERN_DEBUG "Clear bit CHAN_IDLE_HIGH");
+++    }
+++}
+++EXPORT_SYMBOL(ath9k_hw_chan_idle_high);
+++
+++void ath9k_hw_set_carrier_sensing_off(struct ath_hw *ah, bool value)
+++{
+++    if (value) {
+++        // Disable backoff
+++        REG_SET_BIT(ah, AR_D_GBL_IFS_MISC, AR_D_GBL_IFS_MISC_IGNORE_BACKOFF);
+++        // Set sifs to 1 us
+++        ath9k_hw_set_sifs_time(ah, 1);
+++        // Set slot time to 1 us
+++        ath9k_hw_setslottime(ah, 1);
+++        // Set EIFS to 1us
+++        REG_WRITE(ah, AR_D_GBL_IFS_EIFS, ath9k_hw_mac_to_clks(ah, 1));
+++        printk(KERN_DEBUG "Set carrier sensing off");
+++    }else{
+++        REG_CLR_BIT(ah, AR_D_GBL_IFS_MISC, AR_D_GBL_IFS_MISC_IGNORE_BACKOFF);
+++        // Set sifs to 32 us
+++        ath9k_hw_set_sifs_time(ah, 32);
+++        // Set slot time to 13 us
+++        ath9k_hw_setslottime(ah, 13);
+++        // Set EIFS to 1us
+++        REG_WRITE(ah, AR_D_GBL_IFS_EIFS, ath9k_hw_mac_to_clks(ah, 100));
+++        printk(KERN_DEBUG "Set carrier sensing on");
+++    }
+++}
+++EXPORT_SYMBOL(ath9k_hw_set_carrier_sensing_off);
+++
++ int ath9k_hw_reset(struct ath_hw *ah, struct ath9k_channel *chan,
++ 		   struct ath9k_hw_cal_data *caldata, bool fastcc)
++ {
++@@ -1936,6 +2087,18 @@ int ath9k_hw_reset(struct ath_hw *ah, st
++ 	bool start_mci_reset = false;
++ 	bool save_fullsleep = ah->chip_fullsleep;
++ 
+++    // u32 ar_diag_sw_backup;
+++    // u32 ar_d_gbl_ifs_misc_backup;
+++    // u32 ar_d_gbl_ifs_eifs_backup;
+++    // u32 ar_d_gbl_ifs_slot_backup;
+++    // u32 ar_d_gbl_ifs_sifs_backup;
+++
+++    // ar_diag_sw_backup = REG_READ(ah, AR_DIAG_SW);
+++    // ar_d_gbl_ifs_misc_backup = REG_READ(ah, AR_D_GBL_IFS_MISC);
+++    // ar_d_gbl_ifs_eifs_backup = REG_READ(ah, AR_D_GBL_IFS_EIFS);
+++	// ar_d_gbl_ifs_slot_backup = REG_READ(ah, AR_D_GBL_IFS_SLOT);
+++    // ar_d_gbl_ifs_sifs_backup = REG_READ(ah, AR_D_GBL_IFS_SIFS);
+++
++ 	if (ath9k_hw_mci_is_enabled(ah)) {
++ 		start_mci_reset = ar9003_mci_start_reset(ah, chan);
++ 		if (start_mci_reset)
++@@ -2135,14 +2298,24 @@ int ath9k_hw_reset(struct ath_hw *ah, st
++ 	if (AR_SREV_9565(ah) && common->bt_ant_diversity)
++ 		REG_SET_BIT(ah, AR_BTCOEX_WL_LNADIV, AR_BTCOEX_WL_LNADIV_FORCE_ON);
++ 
+++	if (AR_SREV_9330(ah) || AR_SREV_9340(ah))
+++		ath9k_hw_disable_pll_lock_detect(ah);
+++
+++    ath9k_restore_registers(ah);
+++
++ 	if (ah->hw->conf.radar_enabled) {
++ 		/* set HW specific DFS configuration */
++ 		ah->radar_conf.ext_channel = IS_CHAN_HT40(chan);
++ 		ath9k_hw_set_radar_params(ah);
++ 	}
++ 
++-	if (AR_SREV_9330(ah) || AR_SREV_9340(ah))
++-		ath9k_hw_disable_pll_lock_detect(ah);
+++    // Re-write modified registers
+++    // printk(KERN_DEBUG "ath9k_hw_reset: re-write AR_DIAG_SW: %lx", ar_diag_sw_backup);
+++    // REG_WRITE(ah, AR_DIAG_SW, ar_diag_sw_backup);
+++    // REG_WRITE(ah, AR_D_GBL_IFS_MISC, ar_d_gbl_ifs_misc_backup);
+++    // REG_WRITE(ah, AR_D_GBL_IFS_EIFS, ar_d_gbl_ifs_eifs_backup);
+++    // REG_WRITE(ah, AR_D_GBL_IFS_SLOT, ar_d_gbl_ifs_slot_backup);
+++	// REG_WRITE(ah, AR_D_GBL_IFS_SIFS, ar_d_gbl_ifs_sifs_backup);
++ 
++ 	return 0;
++ }
++@@ -2241,6 +2414,18 @@ static bool ath9k_hw_set_power_awake(str
++ 	u32 val;
++ 	int i;
++ 
+++    // u32 ar_diag_sw_backup;
+++    // u32 ar_d_gbl_ifs_misc_backup;
+++    // u32 ar_d_gbl_ifs_eifs_backup;
+++    // u32 ar_d_gbl_ifs_slot_backup;
+++    // u32 ar_d_gbl_ifs_sifs_backup;
+++
+++    // ar_diag_sw_backup = REG_READ(ah, AR_DIAG_SW);
+++    // ar_d_gbl_ifs_misc_backup = REG_READ(ah, AR_D_GBL_IFS_MISC);
+++    // ar_d_gbl_ifs_eifs_backup = REG_READ(ah, AR_D_GBL_IFS_EIFS);
+++	// ar_d_gbl_ifs_slot_backup = REG_READ(ah, AR_D_GBL_IFS_SLOT);
+++    // ar_d_gbl_ifs_sifs_backup = REG_READ(ah, AR_D_GBL_IFS_SIFS);
+++
++ 	/* Set Bits 14 and 17 of AR_WA before powering on the chip. */
++ 	if (AR_SREV_9300_20_OR_LATER(ah)) {
++ 		REG_WRITE(ah, AR_WA, ah->WARegVal);
++@@ -2286,6 +2471,15 @@ static bool ath9k_hw_set_power_awake(str
++ 
++ 	REG_CLR_BIT(ah, AR_STA_ID1, AR_STA_ID1_PWR_SAV);
++ 
+++    ath9k_restore_registers(ah);
+++
+++    // Re-write modified registers
+++    // printk(KERN_DEBUG "ath9k_hw_set_power_awake: re-write AR_DIAG_SW: %lx", ar_diag_sw_backup);
+++    // REG_WRITE(ah, AR_DIAG_SW, ar_diag_sw_backup);
+++    // REG_WRITE(ah, AR_D_GBL_IFS_MISC, ar_d_gbl_ifs_misc_backup);
+++    // REG_WRITE(ah, AR_D_GBL_IFS_EIFS, ar_d_gbl_ifs_eifs_backup);
+++    // REG_WRITE(ah, AR_D_GBL_IFS_SLOT, ar_d_gbl_ifs_slot_backup);
+++	// REG_WRITE(ah, AR_D_GBL_IFS_SIFS, ar_d_gbl_ifs_sifs_backup);
++ 	return true;
++ }
++ 
++--- a/drivers/net/wireless/ath/ath9k/hw.h
+++++ b/drivers/net/wireless/ath/ath9k/hw.h
++@@ -773,6 +773,45 @@ enum ath_cal_list {
++ 	TX_CL_CAL         =	BIT(2),
++ };
++ 
+++/* Code from drivers/net/wireless/ath/ath9k/htc_drv_debug.c of the following repository https://github.com/vanhoefm/modwifi-linux,
+++ * modified by Mario Franke
+++*/
+++
+++/*
+++* reg_ops - describes one specific functionality of a particular register
+++*
+++* @name: name of the register as used in debugfs
+++* @address: memory address of the register
+++* @mask: mask for the specific functionality we are exposing. One single addresses
+++*        may have multiple reg_ops, one for each mask/functionality.
+++* @description: human readable description of the functionality
+++*/
+++struct reg_ops {
+++    const char *name;
+++    unsigned int address;
+++    unsigned int mask;
+++    const char *description;
+++};
+++
+++/**
+++* reg_ops_instance - describes a specific configuration of a reg_ops register
+++*
+++* @regops: the register functionality we are referencing
+++* @valueset: did the user write a custom value to this register?
+++* @value: the value the user wrote to the register
+++* @owner: the interface on which the custom value was set
+++*
+++* @next: pointer to next reg_ops_instance, to create linked lists
+++*/
+++struct reg_ops_instance {
+++    struct reg_ops *regops;
+++    char valueset;
+++    unsigned int value;
+++    struct ath_softc *owner;
+++    struct reg_ops_instance *next;
+++};
+++/*--------------------------------------------------------------------------------------------*/
+++
++ /* ah_flags */
++ #define AH_USE_EEPROM   0x1
++ #define AH_UNPLUGGED    0x2 /* The card has been physically removed. */
++@@ -987,6 +1026,12 @@ struct ath_hw {
++ 
++ 	struct ath_dynack dynack;
++ 
+++/* Code from drivers/net/wireless/ath/ath9k/htc_drv_debug.c of the following repository https://github.com/vanhoefm/modwifi-linux,
+++*/
+++    /** Linked list of (possibly) manually overwritten registers */
+++    struct reg_ops_instance *modified_registers;
+++/*----------------------------------------------------------*/
+++
++ 	bool tpc_enabled;
++ 	u8 tx_power[Ar5416RateSize];
++ 	u8 tx_power_stbc[Ar5416RateSize];
++@@ -1084,6 +1129,25 @@ bool ath9k_hw_check_alive(struct ath_hw
++ 
++ bool ath9k_hw_setpower(struct ath_hw *ah, enum ath9k_power_mode mode);
++ void ath9k_hw_update_diag(struct ath_hw *ah);
+++void ath9k_hw_set_carrier_sensing_off(struct ath_hw *ah, bool value);
+++void ath9k_hw_halt_rx(struct ath_hw *ah, bool value);
+++void ath9k_hw_rx_clear_high(struct ath_hw *ah, bool value);
+++void ath9k_hw_ignore_nav(struct ath_hw *ah, bool value);
+++void ath9k_hw_chan_idle_high(struct ath_hw *ah, bool value);
+++
+++/* Code from drivers/net/wireless/ath/ath9k/htc_drv_debug.c of the following repository https://github.com/vanhoefm/modwifi-linux */
+++void ath9k_hw_set_sifs_time(struct ath_hw *ah, u32 us);
+++void ath9k_hw_setslottime(struct ath_hw *ah, u32 us);
+++void ath9k_hw_set_ack_timeout(struct ath_hw *ah, u32 us);
+++void ath9k_hw_set_cts_timeout(struct ath_hw *ah, u32 us);
+++void ath9k_hw_set_eifs_timeout(struct ath_hw *ah, u32 us);
+++
+++u32 ath9k_hw_get_sifs_time(struct ath_hw *ah);
+++u32 ath9k_hw_getslottime(struct ath_hw *ah);
+++u32 ath9k_hw_get_ack_timeout(struct ath_hw *ah);
+++u32 ath9k_hw_get_cts_timeout(struct ath_hw *ah);
+++u32 ath9k_hw_get_eifs_timeout(struct ath_hw *ah);
+++/*-----------------------------------------------------------*/
++ 
++ /* Generic hw timer primitives */
++ struct ath_gen_timer *ath_gen_timer_alloc(struct ath_hw *ah,
++--- a/drivers/net/wireless/ath/ath9k/debug.h
+++++ b/drivers/net/wireless/ath/ath9k/debug.h
++@@ -247,6 +247,7 @@ struct ath_stats {
++ 
++ struct ath9k_debug {
++ 	struct dentry *debugfs_phy;
+++    struct dentry *debugfs_phy_regs;
++ 	u32 regidx;
++ 	struct ath_stats stats;
++ };
+diff --git a/lib/openWRT/package/kernel/mac80211/patches/ath/999-ath9k_enable_tpc.patch b/lib/openWRT/package/kernel/mac80211/patches/ath/999-ath9k_enable_tpc.patch
+new file mode 100644
+index 0000000000..5a1dc21672
+--- /dev/null
++++ b/lib/openWRT/package/kernel/mac80211/patches/ath/999-ath9k_enable_tpc.patch
+@@ -0,0 +1,12 @@
++--- a/drivers/net/wireless/ath/ath9k/hw.c
+++++ b/drivers/net/wireless/ath/ath9k/hw.c
++@@ -461,7 +461,7 @@ static void ath9k_hw_init_defaults(struc
++ 	ah->power_mode = ATH9K_PM_UNDEFINED;
++ 	ah->htc_reset_init = true;
++ 
++-	ah->tpc_enabled = false;
+++	ah->tpc_enabled = true;
++ 
++ 	ah->ani_function = ATH9K_ANI_ALL;
++ 	if (!AR_SREV_9300_20_OR_LATER(ah))
++
+diff --git a/lib/openWRT/package/kernel/mac80211/patches/ath/999-txpower-ath9k.patch b/lib/openWRT/package/kernel/mac80211/patches/ath/999-txpower-ath9k.patch
+new file mode 100644
+index 0000000000..8800283e56
+--- /dev/null
++++ b/lib/openWRT/package/kernel/mac80211/patches/ath/999-txpower-ath9k.patch
+@@ -0,0 +1,14 @@
++--- a/drivers/net/wireless/ath/ath9k/xmit.c
+++++ b/drivers/net/wireless/ath/ath9k/xmit.c
++@@ -2217,6 +2217,11 @@
++ 		struct ieee80211_vif *vif = tx_info->control.vif;
++ 
++ 		txpower = 2 * vif->bss_conf.txpower;
+++	} else if (tx_info->control.txpower_set) {
+++		struct ath_softc *sc = hw->priv;
+++		
+++		txpower = 2 * tx_info->control.txpower;
+++
++ 	} else {
++ 		struct ath_softc *sc = hw->priv;
++ 
+diff --git a/lib/openWRT/package/kernel/mac80211/patches/ath/999-txpower-parse.patch b/lib/openWRT/package/kernel/mac80211/patches/ath/999-txpower-parse.patch
+new file mode 100644
+index 0000000000..19295af342
+--- /dev/null
++++ b/lib/openWRT/package/kernel/mac80211/patches/ath/999-txpower-parse.patch
+@@ -0,0 +1,35 @@
++--- a/net/mac80211/tx.c
+++++ b/net/mac80211/tx.c
++@@ -1942,6 +1942,8 @@ static bool ieee80211_parse_tx_radiotap(
++ 	u16 vht_known;
++ 	u8 vht_mcs = 0, vht_nss = 0;
++ 	int i;
+++	bool txpower_found = false;
+++	s8 txpower;
++ 
++ 	info->flags |= IEEE80211_TX_INTFL_DONT_ENCRYPT |
++ 		       IEEE80211_TX_CTL_DONTFRAG;
++@@ -2048,6 +2050,12 @@ static bool ieee80211_parse_tx_radiotap(
++ 			vht_nss = iterator.this_arg[4] & 0xF;
++ 			break;
++ 
+++		case IEEE80211_RADIOTAP_DBM_ANTSIGNAL:
+++			txpower_found = true;
+++			txpower = *iterator.this_arg;
+++
+++			break;
+++
++ 		/*
++ 		 * Please update the file
++ 		 * Documentation/networking/mac80211-injection.txt
++@@ -2094,6 +2105,10 @@ static bool ieee80211_parse_tx_radiotap(
++ 						     local->hw.max_rate_tries);
++ 	}
++ 
+++	if (txpower_found) {
+++		info->control.txpower = txpower;
+++		info->control.txpower_set = true;
+++	}
++ 	/*
++ 	 * remove the radiotap header
++ 	 * iterator->_max_length was sanity-checked against
+diff --git a/lib/openWRT/package/kernel/mac80211/patches/ath/999-txpower.patch b/lib/openWRT/package/kernel/mac80211/patches/ath/999-txpower.patch
+new file mode 100644
+index 0000000000..5a344371b3
+--- /dev/null
++++ b/lib/openWRT/package/kernel/mac80211/patches/ath/999-txpower.patch
+@@ -0,0 +1,16 @@
++--- a/include/net/mac80211.h
+++++ b/include/net/mac80211.h
++@@ -913,7 +913,12 @@ struct ieee80211_tx_info {
++ 					u8 use_cts_prot:1;
++ 					u8 short_preamble:1;
++ 					u8 skip_table:1;
++-					/* 2 bytes free */
+++
+++					/* txpower field refers to the first
+++					 * entry of rates only (if present).
+++					 */
+++					s8 txpower;
+++					bool txpower_set;
++ 				};
++ 				/* only needed before rate control */
++ 				unsigned long jiffies;
+diff --git a/lib/openWRT/pxe_boot_server/images b/lib/openWRT/pxe_boot_server/images
+new file mode 120000
+index 0000000000..08562955af
+--- /dev/null
++++ b/lib/openWRT/pxe_boot_server/images
+@@ -0,0 +1 @@
++../bin/targets/x86/geode
+\ No newline at end of file
+diff --git a/lib/openWRT/pxe_boot_server/pxelinux.cfg/default b/lib/openWRT/pxe_boot_server/pxelinux.cfg/default
+new file mode 100644
+index 0000000000..7f3c771397
+--- /dev/null
++++ b/lib/openWRT/pxe_boot_server/pxelinux.cfg/default
+@@ -0,0 +1,23 @@
++# This file is part of Lanradio.
++#
++# Lanradio is free software: you can redistribute it and/or modify
++# it under the terms of the GNU Lesser General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# Lanradio is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public License
++# along with Lanradio.  If not, see <http://www.gnu.org/licenses/>.
++#
++# Authors:
++# Florian Klingler <klingler@ccs-labs.org>
++
++DEFAULT openWRT
++LABEL openWRT
++kernel images/openwrt-x86-geode-ramfs.bzImage
++append vga=on panic=60 console=tty0 alix.force=1
++TIMEOUT 0
+diff --git a/lib/openWRT/pxe_boot_server/start_dnsmasq.sh b/lib/openWRT/pxe_boot_server/start_dnsmasq.sh
+new file mode 100755
+index 0000000000..2cef290ffc
+--- /dev/null
++++ b/lib/openWRT/pxe_boot_server/start_dnsmasq.sh
+@@ -0,0 +1,38 @@
++# This file is part of Lanradio.
++#
++# Lanradio is free software: you can redistribute it and/or modify
++# it under the terms of the GNU Lesser General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# Lanradio is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public License
++# along with Lanradio.  If not, see <http://www.gnu.org/licenses/>.
++#
++# Authors:
++# Florian Klingler <klingler@ccs-labs.org>
++
++#!/bin/bash
++
++interface=enp0s31f6
++
++#
++# If you encounter errors, e.g., Permission denied accessing the TFTP directory, ensure that APPARMOR, or SELINUX is not blocking access to the directories
++#
++
++set -e
++set -x
++
++sudo ifconfig $interface down
++sudo ifconfig $interface up 10.0.197.200
++
++sudo iptables -I INPUT 1 -i $interface -j ACCEPT
++
++curr_dir=$(pwd)
++my_userid=$USER
++
++sudo dnsmasq -p 0 -i $interface -d -K --log-dhcp --bootp-dynamic -z --dhcp-range=10.0.197.1,10.0.197.100,255.255.255.0,1h --dhcp-boot=pxelinux.0,pxeserver,10.0.197.200 --pxe-service=x86PC,"openWRT",pxelinux --enable-tftp --tftp-root=$curr_dir --leasefile-ro --tftp-secure --user=$my_userid
+diff --git a/lib/openWRT/tools/squashfskit4/Makefile b/lib/openWRT/tools/squashfskit4/Makefile
+index 4808c5607f..396a7c0edc 100644
+--- a/lib/openWRT/tools/squashfskit4/Makefile
++++ b/lib/openWRT/tools/squashfskit4/Makefile
+@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=squashfskit4
+ PKG_VERSION:=4.14
+-
++PKG_RELEASE:=2
+ PKG_SOURCE:=squashfskit-v$(PKG_VERSION).tar.xz
+ PKG_SOURCE_URL:=https://github.com/squashfskit/squashfskit/releases/download/v$(PKG_VERSION)/
+ PKG_HASH:=5761aaa3aedc4f7112b708367d891c9abdc1ffea972e3fe47923ddba23984d95
+diff --git a/lib/openWRT/tools/squashfskit4/patches/0002-fix-build-failure-against-gcc-10.patch b/lib/openWRT/tools/squashfskit4/patches/0002-fix-build-failure-against-gcc-10.patch
+new file mode 100644
+index 0000000000..71cc9cdd85
+--- /dev/null
++++ b/lib/openWRT/tools/squashfskit4/patches/0002-fix-build-failure-against-gcc-10.patch
+@@ -0,0 +1,43 @@
++From fe2f5da4b0f8994169c53e84b7cb8a0feefc97b5 Mon Sep 17 00:00:00 2001
++From: Sergei Trofimovich <slyfox@gentoo.org>
++Date: Sun, 26 Jan 2020 18:35:13 +0000
++Subject: [PATCH] squashfs-tools: fix build failure against gcc-10
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++On gcc-10 (and gcc-9 -fno-common) build fails as:
++
++```
++cc ... -o mksquashfs
++ld: read_fs.o:(.bss+0x0):
++  multiple definition of `fwriter_buffer'; mksquashfs.o:(.bss+0x400c90): first defined here
++ld: read_fs.o:(.bss+0x8):
++  multiple definition of `bwriter_buffer'; mksquashfs.o:(.bss+0x400c98): first defined here
++```
++
++gcc-10 will change the default from -fcommon to fno-common:
++https://gcc.gnu.org/PR85678.
++
++The error also happens if CFLAGS=-fno-common passed explicitly.
++
++Reported-by: Toralf Förster
++Bug: https://bugs.gentoo.org/706456
++Signed-off-by: Sergei Trofimovich <slyfox@gentoo.org>
++---
++ squashfs-tools/mksquashfs.h | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/squashfs-tools/mksquashfs.h b/squashfs-tools/mksquashfs.h
++index 1beefef7..b6503063 100644
++--- a/squashfs-tools/mksquashfs.h
+++++ b/squashfs-tools/mksquashfs.h
++@@ -143,7 +143,7 @@ struct append_file {
++ #endif
++ 
++ extern struct cache *reader_buffer, *fragment_buffer, *reserve_cache;
++-struct cache *bwriter_buffer, *fwriter_buffer;
+++extern struct cache *bwriter_buffer, *fwriter_buffer;
++ extern struct queue *to_reader, *to_deflate, *to_writer, *from_writer,
++    *to_frag, *locked_fragment, *to_process_frag;
++ extern struct append_file **file_mapping;
+diff --git a/lib/sumo/CMakeLists.txt b/lib/sumo/CMakeLists.txt
+index 3af02fa207..6a4bbf37ca 100644
+--- a/lib/sumo/CMakeLists.txt
++++ b/lib/sumo/CMakeLists.txt
+@@ -37,7 +37,12 @@ endif()
+ # compiler specific flags
+ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
+         "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -Wall -pedantic -Wextra")
++    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
++        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -Wall -pedantic -Wextra")
++    endif ()
++    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
++        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -Wall -pedantic -Wextra -stdlib=libstdc++")
++    endif ()
+     set(ENABLED_FEATURES "${ENABLED_FEATURES} ${CMAKE_BUILD_TYPE}")
+     if (PROFILING)
+         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
