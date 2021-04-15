@@ -1,0 +1,3 @@
+pstreams/pstream.h: https://downloads.sourceforge.net/project/pstreams/pstreams/Release%201.0/pstreams-1.0.1.tar.gz
+
+zmq/zmq.hpp: https://github.com/zeromq/cppzmq/raw/v4.2.2/zmq.hpp

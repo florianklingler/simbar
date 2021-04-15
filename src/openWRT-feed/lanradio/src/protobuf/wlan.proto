@@ -1,0 +1,19 @@
+package wlanPackage;
+
+message WLAN {
+	 enum Priority {
+		BK = 1;
+		BE = 0;
+		VI = 4;
+		VO = 6;
+		NA = 9;
+	 }
+	required Priority priority = 1;
+	required bytes payload = 2;
+	required bytes srcmac = 3;
+	required bytes dstmac = 4;
+	required uint32 ethertype = 5;
+	optional double txPower = 6;
+	optional double bitRate = 7;
+	optional bool isLoopBack = 8;
+}
