@@ -1,0 +1,79 @@
+#!/usr/bin/env python2
+
+"""
+Creates Makefile(s) for building the Lanradio extenstions to Veins.
+"""
+
+import os
+import sys
+import subprocess
+from logging import info, warning, error
+from optparse import OptionParser
+
+proj_name = "SimbaR"
+
+
+if sys.version_info[0] == 3:
+    warning("Warning: running configure with python3 might result in subtle errors.")
+
+# Option handling
+parser = OptionParser()
+parser.add_option('--veins', dest='veins', default='../veins', help='Path to Veins library')
+parser.add_option('--etsimsg', dest='etsi', default='../etsi-messages', help='Path to Etsi Messages library')
+(options, args) = parser.parse_args()
+
+if args:
+    warning("Superfluous command line arguments: \"%s\"" % " ".join(args))
+
+# Start with default flags
+makemake_flags = [
+    '-f',
+    '--deep',
+    '--no-deep-includes',
+    '--make-so',
+    '-I', '.',
+    '-I', '../{}/src'.format(options.veins),
+    '-L', '../{}/src'.format(options.veins),
+    '-lveins$(D)',
+    '-I', '../{}/include'.format(options.etsi),
+    '-L', '../{}/'.format(options.etsi),
+    '-lssl',
+    '-letsimsg',
+    '-o', proj_name,
+    '-O', '../out',
+]
+
+run_libs = ['src/{}'.format(proj_name), '{}/src/veins'.format(options.veins)]
+run_neds = ['src/{}'.format(proj_name), '{}/src/veins'.format(options.veins)]
+
+# Start creating files
+if not os.path.isdir('out'):
+    os.mkdir('out')
+
+f = open(os.path.join('out', 'config.py'), 'w')
+f.write('run_libs = %s\n' % repr(run_libs))
+f.write('run_neds = %s\n' % repr(run_neds))
+f.close()
+
+# compile protobuf proto files
+proto_cppout = 'src/protobuf'
+proto_source_dirs = [
+    # add paths to proto files here
+    "src/{}/protobuf".format(proj_name),
+]
+if not os.path.isdir(proto_cppout):
+    os.mkdir(proto_cppout)
+for proto_source in proto_source_dirs:
+    protoc_flags = ['--proto_path', proto_source, '--cpp_out', proto_cppout]
+    # recursivly find proto files
+    protoc_files = [
+        os.path.join(path, fname)
+        for (path, _, fnames) in os.walk(proto_source)
+        for fname in fnames
+        if fname.endswith('.proto')
+    ]
+    subprocess.check_call(['env', 'protoc'] + protoc_flags + protoc_files)
+
+subprocess.check_call(['env', 'opp_makemake'] + makemake_flags, cwd='src')
+
+info('Configure done. You can now run "make".')
