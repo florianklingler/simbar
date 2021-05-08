@@ -1,0 +1,138 @@
+# Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+
+echo "=========================" > /dev/tty0
+echo "Configuring interfaces..." > /dev/tty0
+echo "=========================" > /dev/tty0
+
+sh -c "TERM=linux setterm --blank 0 --powerdown 0 --blink off --cursor off >/dev/tty0"
+
+sleep 15
+MAC=$(cat /sys/class/net/eth0/address)
+
+setup_ocb () {
+  iw reg set DE
+  ip link set wlan1 down
+  iw dev wlan1 set type ocb
+  ip link set wlan1 up
+  iw dev wlan1 ocb join 5900 10MHZ
+  ifconfig wlan1 $1
+  iw dev wlan1 set txpower fixed 300
+  # iw dev wlan1 set bitrates legacy-5 6
+}
+
+case "$MAC" in
+  "00:12:3f:13:4d:90")
+    echo "Setting values for gericom3"
+    echo "gericom3" > /proc/sys/kernel/hostname
+    ifconfig br-lan 10.0.197.103
+    # setup_ocb 192.168.99.103
+  ;;
+  "00:0d:b9:3f:7c:bc")
+    echo "Setting values for apu1"
+    echo "apu1" > /proc/sys/kernel/hostname
+    ifconfig br-lan 10.0.197.101
+    # setup_ocb 192.168.99.101
+  ;;
+  "00:0d:b9:48:97:60")
+    echo "Setting values for apu4"
+    echo "apu4" > /proc/sys/kernel/hostname
+    ifconfig br-lan 10.0.197.104
+    # setup_ocb 192.168.99.104
+  ;;
+  "00:0d:b9:2e:c3:dc")
+    echo "Setting values for alix3"
+    echo "alix3" > /proc/sys/kernel/hostname
+    ifconfig br-lan 10.0.197.103
+    # setup_ocb 192.168.99.103
+  ;;
+  "00:0d:b9:58:ab:8c")
+    echo "Setting values for apuSIMINT"
+    echo "apuSIMINT" > /proc/sys/kernel/hostname
+    ifconfig br-lan 10.0.197.103
+    # setup_ocb 192.168.99.103
+  ;;
+  "00:0d:b9:2e:c3:a4")
+    echo "Setting values for alix4"
+    echo "alix4" > /proc/sys/kernel/hostname
+    ifconfig br-lan 10.0.197.104
+    # setup_ocb 192.168.99.104
+  ;;
+  "00:0d:b9:58:ac:ec")
+    echo "Setting values for apuDUT"
+    echo "apuDUT" > /proc/sys/kernel/hostname
+    ifconfig br-lan 10.0.197.104
+    # setup_ocb 192.168.99.104
+  ;;
+  "00:0d:b9:2e:d1:40")
+    echo "Setting values for alix5"
+    echo "alix5" > /proc/sys/kernel/hostname
+    ifconfig br-lan 10.0.197.105
+  ;;
+  "00:0d:b9:2e:c7:a8")
+    echo "Setting values for alix6"
+    echo "alix6" > /proc/sys/kernel/hostname
+    ifconfig br-lan 10.0.197.106
+  ;;
+  "00:0d:b9:55:98:08")
+    echo "Setting values for apuINTERFERENCE"
+    echo "apuINTERFERENCE" > /proc/sys/kernel/hostname
+    ifconfig br-lan 10.0.197.106
+esac
+
+# [ -f /etc/banner.sh ] && . /etc/banner.sh && echo "$BANNERTEXT" > /dev/tty0
+
+# setting up leds
+#echo "25" > /sys/class/gpio/export
+#echo "out" > /sys/class/gpio/GPIO25/direction
+#echo "1" > /sys/class/gpio/GPIO25/value
+
+#echo "27" > /sys/class/gpio/export
+#echo "out" > /sys/class/gpio/GPIO27/direction
+#echo "1" > /sys/class/gpio/GPIO27/value
+
+
+
+case "$MAC" in
+  "00:12:3f:13:4d:90")
+    echo "Setting values for gericom3"
+  ;;
+  "00:0d:b9:3f:7c:bc")
+    echo "Setting values for apu1"
+  ;;
+  "00:0d:b9:48:97:60")
+    echo "Setting values for apu4"
+  ;;
+  "00:0d:b9:2e:c3:dc")
+    echo "Setting values for alix3"
+    [ -f /etc/banner.sh ] && . /etc/banner.sh && lanradio --useUDP true --dualRadio true --VeinsHostname 10.0.197.200 > $HOME/log.txt &
+  ;;
+  "00:0d:b9:58:ab:8c")
+    echo "Setting values for apuSIMINT"
+    #[ -f /etc/banner.sh ] && . /etc/banner.sh && lanradio --useUDP true --dualRadio true --VeinsHostname 10.0.197.200 > $HOME/log.txt &
+    [ -f /etc/banner.sh ] && . /etc/banner.sh &
+  ;;
+  "00:0d:b9:2e:c3:a4")
+    echo "Setting values for alix4"
+    [ -f /etc/banner.sh ] && . /etc/banner.sh && lanradio --interface wlan1 --useUDP true --prototype true --VeinsHostname 10.0.197.200 > $HOME/log.txt &
+  ;;
+  "00:0d:b9:58:ac:ec")
+    echo "Setting values for apuDUT"
+    #[ -f /etc/banner.sh ] && . /etc/banner.sh && lanradio --interface wlan1 --useUDP true --prototype true --VeinsHostname 10.0.197.200 > $HOME/log.txt &
+    [ -f /etc/banner.sh ] && . /etc/banner.sh &
+  ;;
+  "00:0d:b9:2e:d1:40")
+    echo "Setting values for alix5"
+    [ -f /etc/banner.sh ] && . /etc/banner.sh && lanradio --useUDP true --useChanload true --VeinsHostname 10.0.197.200 > $HOME/log.txt &
+  ;;
+  "00:0d:b9:2e:c7:a8")
+    echo "Setting values for alix6"
+    [ -f /etc/banner.sh ] && . /etc/banner.sh && lanradio --useUDP true --InterferenceMode true --VeinsHostname 10.0.197.200 --baseport 22222 > $HOME/log.txt &
+  ;;
+  "00:0d:b9:55:98:08")
+    echo "Setting values for apuINTERFERENCE"
+    #[ -f /etc/banner.sh ] && . /etc/banner.sh && lanradio --useUDP true --InterferenceMode true --VeinsHostname 10.0.197.200 --baseport 22222 > $HOME/log.txt &
+    [ -f /etc/banner.sh ] && . /etc/banner.sh &
+esac
+
+exit 0
