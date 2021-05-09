@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on Di 16 Jun 2020 14:50:21 CEST by Eclipse SUMO netedit Version 1.2.0
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+    <input>
+        <sumo-net-file value="StaticScenario.net.xml"/>
+    </input>
+
+    <output>
+        <output-file value="StaticScenario.net.xml"/>
+    </output>
+
+    <processing>
+        <geometry.max-grade.fix value="false"/>
+        <offset.disable-normalization value="true"/>
+        <lefthand value="false"/>
+    </processing>
+
+    <junctions>
+        <no-turnarounds value="true"/>
+        <junctions.corner-detail value="5"/>
+        <junctions.limit-turn-speed value="5.5"/>
+        <rectangular-lane-cut value="false"/>
+    </junctions>
+
+    <pedestrian>
+        <walkingareas value="false"/>
+    </pedestrian>
+
+    <netedit>
+        <route-files value="/home/franke/master-thesis/lanradio-franke/src/veins_lara/examples/StaticScenario/StaticScenario.rou.xml"/>
+    </netedit>
+
+</configuration>
+-->
+
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <route id="route_0" edges="-gneE1" color="red"/>
+    <route id="route_1" edges="gneE0" color="blue"/>
+    <route id="route_2" edges="gneE2" color="red"/>
+    <vehicle id="east" type="DEFAULT_VEHTYPE" depart="0.00" departPos="33.40" route="route_1">
+        <stop lane="gneE0_0" endPos="33.40" duration="999999999999.00"/>
+    </vehicle>
+    <vehicle id="north" type="DEFAULT_VEHTYPE" depart="0.00" departPos="11.70" route="route_0">
+        <stop lane="-gneE1_0" endPos="11.70" duration="99999999999.00"/>
+    </vehicle>
+    <vehicle id="west" type="DEFAULT_VEHTYPE" depart="0.00" departPos="21.20" route="route_2">
+        <stop lane="gneE2_0" endPos="21.20" duration="99999999999.00"/>
+    </vehicle>
+</routes>

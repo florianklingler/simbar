@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on Di 16 Jun 2020 14:40:33 CEST by Eclipse SUMO netedit Version 1.2.0
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+    <input>
+        <sumo-net-file value="StaticScenario.net.xml"/>
+    </input>
+
+    <output>
+        <output-file value="StaticScenario.net.xml"/>
+    </output>
+
+    <processing>
+        <geometry.max-grade.fix value="false"/>
+        <offset.disable-normalization value="true"/>
+        <lefthand value="false"/>
+    </processing>
+
+    <junctions>
+        <no-turnarounds value="true"/>
+        <junctions.corner-detail value="5"/>
+        <junctions.limit-turn-speed value="5.5"/>
+        <rectangular-lane-cut value="false"/>
+    </junctions>
+
+    <pedestrian>
+        <walkingareas value="false"/>
+    </pedestrian>
+
+    <netedit>
+        <route-files value="/home/franke/master-thesis/lanradio-franke/src/veins_lara/examples/StaticScenario/StaticScenario.rou.xml"/>
+    </netedit>
+
+</configuration>
+-->
+
+<net version="1.1" junctionCornerDetail="5" limitTurnSpeed="5.50" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/net_file.xsd">
+
+    <location netOffset="0.00,0.00" convBoundary="5.00,100.00,115.00,155.00" origBoundary="-10000000000.00,-10000000000.00,10000000000.00,10000000000.00" projParameter="!"/>
+
+    <edge id=":center_0" function="internal">
+        <lane id=":center_0_0" index="0" speed="6.51" length="9.03" shape="58.40,107.20 58.05,104.75 57.00,103.00 55.25,101.95 52.80,101.60"/>
+    </edge>
+    <edge id=":center_1" function="internal">
+        <lane id=":center_1_0" index="0" speed="8.00" length="14.19" shape="58.40,107.20 58.95,103.35 60.60,100.60 63.35,98.95 67.20,98.40"/>
+    </edge>
+    <edge id=":center_2" function="internal">
+        <lane id=":center_2_0" index="0" speed="6.51" length="9.03" shape="67.20,101.60 64.75,101.95 63.00,103.00 61.95,104.75 61.60,107.20"/>
+    </edge>
+    <edge id=":center_3" function="internal">
+        <lane id=":center_3_0" index="0" speed="13.89" length="14.40" shape="67.20,101.60 52.80,101.60"/>
+    </edge>
+    <edge id=":center_4" function="internal">
+        <lane id=":center_4_0" index="0" speed="13.89" length="14.40" shape="52.80,98.40 67.20,98.40"/>
+    </edge>
+    <edge id=":center_5" function="internal">
+        <lane id=":center_5_0" index="0" speed="8.00" length="5.93" shape="52.80,98.40 56.65,98.95 58.40,100.00"/>
+    </edge>
+    <edge id=":center_6" function="internal">
+        <lane id=":center_6_0" index="0" speed="8.00" length="8.26" shape="58.40,100.00 59.40,100.60 61.05,103.35 61.60,107.20"/>
+    </edge>
+
+    <edge id="-gneE0" from="center" to="east" priority="-1">
+        <lane id="-gneE0_0" index="0" speed="13.89" length="47.80" shape="52.80,101.60 5.00,101.60"/>
+    </edge>
+    <edge id="-gneE1" from="north" to="center" priority="-1">
+        <lane id="-gneE1_0" index="0" speed="13.89" length="47.80" shape="58.40,155.00 58.40,107.20"/>
+    </edge>
+    <edge id="-gneE2" from="west" to="center" priority="-1">
+        <lane id="-gneE2_0" index="0" speed="13.89" length="47.80" shape="115.00,101.60 67.20,101.60"/>
+    </edge>
+    <edge id="gneE0" from="east" to="center" priority="-1">
+        <lane id="gneE0_0" index="0" speed="13.89" length="47.80" shape="5.00,98.40 52.80,98.40"/>
+    </edge>
+    <edge id="gneE1" from="center" to="north" priority="-1">
+        <lane id="gneE1_0" index="0" speed="13.89" length="47.80" shape="61.60,107.20 61.60,155.00"/>
+    </edge>
+    <edge id="gneE2" from="center" to="west" priority="-1">
+        <lane id="gneE2_0" index="0" speed="13.89" length="47.80" shape="67.20,98.40 115.00,98.40"/>
+    </edge>
+
+    <junction id="center" type="priority" x="60.00" y="100.00" incLanes="-gneE1_0 -gneE2_0 gneE0_0" intLanes=":center_0_0 :center_1_0 :center_2_0 :center_3_0 :center_4_0 :center_6_0" shape="56.80,107.20 63.20,107.20 63.64,104.98 64.20,104.20 64.98,103.64 65.98,103.31 67.20,103.20 67.20,96.80 52.80,96.80 52.80,103.20 55.02,103.64 55.80,104.20 56.36,104.98 56.69,105.98">
+        <request index="0" response="001000" foes="001000" cont="0"/>
+        <request index="1" response="111000" foes="111000" cont="0"/>
+        <request index="2" response="000000" foes="100000" cont="0"/>
+        <request index="3" response="000000" foes="100011" cont="0"/>
+        <request index="4" response="000000" foes="000010" cont="0"/>
+        <request index="5" response="001100" foes="001110" cont="1"/>
+    </junction>
+    <junction id="east" type="dead_end" x="5.00" y="100.00" incLanes="-gneE0_0" intLanes="" shape="5.00,100.00 5.00,103.20 5.00,100.00"/>
+    <junction id="north" type="dead_end" x="60.00" y="155.00" incLanes="gneE1_0" intLanes="" shape="60.00,155.00 63.20,155.00 60.00,155.00"/>
+    <junction id="west" type="dead_end" x="115.00" y="100.00" incLanes="gneE2_0" intLanes="" shape="115.00,100.00 115.00,96.80 115.00,100.00"/>
+
+    <junction id=":center_6_0" type="internal" x="58.40" y="100.00" incLanes=":center_5_0 -gneE2_0" intLanes=":center_1_0 :center_2_0 :center_3_0"/>
+
+    <connection from="-gneE1" to="-gneE0" fromLane="0" toLane="0" via=":center_0_0" dir="r" state="m"/>
+    <connection from="-gneE1" to="gneE2" fromLane="0" toLane="0" via=":center_1_0" dir="l" state="m"/>
+    <connection from="-gneE2" to="gneE1" fromLane="0" toLane="0" via=":center_2_0" dir="r" state="M"/>
+    <connection from="-gneE2" to="-gneE0" fromLane="0" toLane="0" via=":center_3_0" dir="s" state="M"/>
+    <connection from="gneE0" to="gneE2" fromLane="0" toLane="0" via=":center_4_0" dir="s" state="M"/>
+    <connection from="gneE0" to="gneE1" fromLane="0" toLane="0" via=":center_5_0" dir="l" state="m"/>
+
+    <connection from=":center_0" to="-gneE0" fromLane="0" toLane="0" dir="r" state="M"/>
+    <connection from=":center_1" to="gneE2" fromLane="0" toLane="0" dir="l" state="M"/>
+    <connection from=":center_2" to="gneE1" fromLane="0" toLane="0" dir="r" state="M"/>
+    <connection from=":center_3" to="-gneE0" fromLane="0" toLane="0" dir="s" state="M"/>
+    <connection from=":center_4" to="gneE2" fromLane="0" toLane="0" dir="s" state="M"/>
+    <connection from=":center_5" to="gneE1" fromLane="0" toLane="0" via=":center_6_0" dir="l" state="m"/>
+    <connection from=":center_6" to="gneE1" fromLane="0" toLane="0" dir="l" state="M"/>
+
+</net>

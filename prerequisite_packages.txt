@@ -8,3 +8,4 @@ libncursesw5-dev libssl-dev python python2.7-dev python3 unzip wget
 python3-distutils python3-setuptools rsync subversion swig time
 xsltproc zlib1g-dev
 comerr-dev krb5-multidev libgssrpc4 libkadm5clnt-mit11 libkadm5srv-mit11 libkdb5-9 libkrb5-dev libnorm-dev libnorm1 libpgm-5.2-0 libpgm-dev libsodium-dev libzmq3-dev libzmq5
+net-tools

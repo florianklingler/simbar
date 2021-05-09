@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on Di 16 Jun 2020 14:50:21 CEST by Eclipse SUMO netedit Version 1.2.0
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+    <input>
+        <sumo-net-file value="StaticScenario.net.xml"/>
+    </input>
+
+    <output>
+        <output-file value="StaticScenario.net.xml"/>
+    </output>
+
+    <processing>
+        <geometry.max-grade.fix value="false"/>
+        <offset.disable-normalization value="true"/>
+        <lefthand value="false"/>
+    </processing>
+
+    <junctions>
+        <no-turnarounds value="true"/>
+        <junctions.corner-detail value="5"/>
+        <junctions.limit-turn-speed value="5.5"/>
+        <rectangular-lane-cut value="false"/>
+    </junctions>
+
+    <pedestrian>
+        <walkingareas value="false"/>
+    </pedestrian>
+
+    <netedit>
+        <route-files value="/home/franke/master-thesis/lanradio-franke/src/veins_lara/examples/StaticScenario/StaticScenario.rou.xml"/>
+    </netedit>
+
+</configuration>
+-->
+
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <route id="route_0" edges="gneE8" color="blue"/>
+    <route id="route_1" edges="-gneE6" color="red"/>
+    <route id="route_2" edges="-gneE5" color="red"/>
+    <route id="route_3" edges="-gneE4" color="red"/>
+    <route id="route_4" edges="-gneE3" color="red"/>
+    <route id="route_5" edges="-gneE2" color="red"/>
+    <route id="route_6" edges="-gneE1" color="red"/>
+    <route id="route_7" edges="-gneE0" color="red"/>
+    <route id="route_8" edges="-gneE7" color="red"/>
+    <vehicle id="vDut" type="DEFAULT_VEHTYPE" depart="0.00" departPos="85" route="route_0">
+        <stop lane="gneE8_0" endPos="85" duration="999999999999.00"/>
+    </vehicle>
+    <vehicle id="sim0" type="DEFAULT_VEHTYPE" depart="0.20" departPos="89" route="route_8">
+        <stop lane="-gneE7_0" endPos="89" duration="99999999999.00"/>
+    </vehicle>
+    <vehicle id="sim1" type="DEFAULT_VEHTYPE" depart="0.20" departPos="78" route="route_1">
+        <stop lane="-gneE6_0" endPos="78" duration="99999999999.00"/>
+    </vehicle>
+    <vehicle id="sim2" type="DEFAULT_VEHTYPE" depart="0.20" departPos="67" route="route_2">
+        <stop lane="-gneE5_0" endPos="67" duration="99999999999.00"/>
+    </vehicle>
+    <vehicle id="sim3" type="DEFAULT_VEHTYPE" depart="0.20" departPos="56" route="route_3">
+        <stop lane="-gneE4_0" endPos="56" duration="99999999999.00"/>
+    </vehicle>
+    <vehicle id="sim4" type="DEFAULT_VEHTYPE" depart="0.20" departPos="45" route="route_4">
+        <stop lane="-gneE3_0" endPos="45" duration="99999999999.00"/>
+    </vehicle>
+    <vehicle id="sim5" type="DEFAULT_VEHTYPE" depart="0.20" departPos="34" route="route_5">
+        <stop lane="-gneE2_0" endPos="34" duration="99999999999.00"/>
+    </vehicle>
+    <vehicle id="sim6" type="DEFAULT_VEHTYPE" depart="0.20" departPos="23" route="route_6">
+        <stop lane="-gneE1_0" endPos="23" duration="99999999999.00"/>
+    </vehicle>
+    <vehicle id="sim7" type="DEFAULT_VEHTYPE" depart="0.20" departPos="12" route="route_7">
+        <stop lane="-gneE0_0" endPos="12" duration="99999999999.00"/>
+    </vehicle>
+    <vehicle id="sim8" type="DEFAULT_VEHTYPE" depart="0.20" departPos="89" route="route_7">
+        <stop lane="-gneE0_0" endPos="89" duration="99999999999.00"/>
+    </vehicle>
+</routes>
