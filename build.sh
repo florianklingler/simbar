@@ -1,3 +1,21 @@
+# This file is part of SimbaR.
+#
+# SimbaR is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# SimbaR is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with SimbaR. If not, see <http://www.gnu.org/licenses/>.
+#
+# Authors:
+# Mario Franke <research@m-franke.net>
+
 #!/bin/bash
 
 set -e
@@ -86,13 +104,15 @@ rm pstreams-1.0.1.tar.gz
 mv pstreams-1.0.1/* .
 rm -r pstreams-1.0.1
 cd ../../../../../lib/openWRT
+# Link to config files
+ln -s ../../config/openWRT/files files
+cp -r ../../config/openWRT/pxe_boot/pxelinux.0 pxe_boot_server/pxelinux.0
 # Update openWRT feeds
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 # Copy config file at the right position
 make defconfig	#create .config
-cat ../../SimbaR_diff.config >> .config
-make defconfig	#apply SimbaR config
+cat ../../config/openWRT/SimbaR_diff.config >> .config
 # Call make
 VERSION="0.01"
 BUILD_DATE="$(date --utc)"

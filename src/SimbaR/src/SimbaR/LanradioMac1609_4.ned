@@ -1,6 +1,7 @@
 //
 // Copyright (C) 2018 Florian Klingler <klingler@ccs-labs.org>
 // Copyright (C) 2018 Dominik S. Buse <buse@ccs-labs.org>
+// Copyright (C) 2021 Mario Franke <research@m-franke.net>
 //
 // Documentation for these modules is at http://veins.car2x.org/
 //
@@ -19,7 +20,7 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-package org.car2x.veins.subprojects.veins_lara;
+package org.car2x.veins.subprojects.SimbaR;
 
 import org.car2x.veins.modules.mac.ieee80211p.Mac1609_4;
 
