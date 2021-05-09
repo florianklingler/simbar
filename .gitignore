@@ -1,0 +1,5 @@
+src/SimbaR/examples/StaticScenario/runs.log
+src/SimbaR/examples/StaticScenario/runs.txt
+src/SimbaR/src/SimbaR/pstream.h
+src/openWRT-feed/lanradio/src/pstreams/
+src/openWRT-feed/lanradio/src/zmq/
