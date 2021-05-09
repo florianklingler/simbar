@@ -1,7 +1,12 @@
 # SimbaR
 This is Simulation-based Radio (SimbaR).
-Please refer to "https://www.fklingler.net/bib/franke2021hil/franke2021hil.pdf" for a
+Please refer to "https://www.fklingler.net/bib/franke2021hil" for a
 detailed description.
+
+SimbaR is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
 
 It is tested using Ubuntu 20.04 LTS and PC Engines APU2 single board computers equipped
 with MikroTik R11e-5HnD wlan cards and PC Engines Alix single board computers.
